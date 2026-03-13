@@ -140,6 +140,42 @@ def fit_scaler(X: np.ndarray) -> object:
     return scaler
 
 
+def train_autoencoder(X: np.ndarray, random_state: int = 42) -> object:
+    """
+    Train a lightweight MLP autoencoder surrogate (X -> X reconstruction).
+
+    This is intentionally shallow so inference remains fast during demo replay.
+    """
+    from sklearn.neural_network import MLPRegressor  # type: ignore[import]
+
+    ae = MLPRegressor(
+        hidden_layer_sizes=(16, 8, 16),
+        activation="relu",
+        solver="adam",
+        max_iter=500,
+        random_state=random_state,
+    )
+    ae.fit(X, X)
+    return ae
+
+
+def autoencoder_error(autoencoder: object, X: np.ndarray) -> np.ndarray:
+    """Return per-sample reconstruction MSE."""
+    recon = autoencoder.predict(X)
+    return np.mean((X - recon) ** 2, axis=1)
+
+
+def build_autoencoder_meta(errors: np.ndarray) -> dict[str, float]:
+    """Calibrate reconstruction errors for runtime score normalization."""
+    mean = float(np.mean(errors)) if len(errors) else 0.0
+    std = float(np.std(errors)) if len(errors) else 1.0
+    return {
+        "error_mean": mean,
+        "error_std": std if std > 1e-9 else 1.0,
+        "error_p95": float(np.percentile(errors, 95)) if len(errors) else 0.0,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Persist / load
 # ---------------------------------------------------------------------------
@@ -165,6 +201,11 @@ def main() -> None:
     ap.add_argument("--input",     required=True, help="Input CSV file path.")
     ap.add_argument("--model-dir", default="artifacts/models", help="Directory to save model artifacts.")
     ap.add_argument("--random-state", type=int, default=42)
+    ap.add_argument(
+        "--disable-autoencoder",
+        action="store_true",
+        help="Skip optional autoencoder drift model training.",
+    )
     args = ap.parse_args()
 
     model_dir = Path(args.model_dir)
@@ -196,6 +237,19 @@ def main() -> None:
     print("Training Isolation Forest...")
     if_clf = train_isolation_forest(X_scaled, random_state=args.random_state)
     save_artifact(if_clf, model_dir / "isolation_forest.pkl")
+
+    if not args.disable_autoencoder:
+        print("Training optional autoencoder drift model...")
+        ae = train_autoencoder(X_scaled, random_state=args.random_state)
+        ae_errors = autoencoder_error(ae, X_scaled)
+        ae_meta = build_autoencoder_meta(ae_errors)
+        save_artifact(ae, model_dir / "autoencoder.pkl")
+        save_artifact(ae_meta, model_dir / "autoencoder_meta.pkl")
+        print(
+            f"  Autoencoder calibration mean={ae_meta['error_mean']:.6f} std={ae_meta['error_std']:.6f}"
+        )
+    else:
+        print("Skipping autoencoder training (--disable-autoencoder).")
 
     print("Training device type classifier...")
     dt_clf, classes = train_device_classifier(X_scaled, device_types, random_state=args.random_state)

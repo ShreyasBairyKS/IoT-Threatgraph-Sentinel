@@ -39,20 +39,28 @@ class ModelBundle:
     isolation_forest: Any
     device_classifier: Any          # None if not available
     device_classes: list[str]       # label list matching classifier output
+    autoencoder: Any | None         # Optional day-3 drift detector
+    autoencoder_meta: dict[str, float] | None
 
 
 def load_models(model_dir: str | Path = "artifacts/models") -> ModelBundle:
     """Load all trained artifacts from *model_dir*."""
     d = Path(model_dir)
-    scaler     = load_artifact(d / "scaler.pkl")
-    iforest    = load_artifact(d / "isolation_forest.pkl")
-    dt_clf     = load_artifact(d / "device_classifier.pkl")     if (d / "device_classifier.pkl").exists() else None
-    dt_classes = load_artifact(d / "device_classes.pkl")        if (d / "device_classes.pkl").exists() else []
+    scaler = load_artifact(d / "scaler.pkl")
+    iforest = load_artifact(d / "isolation_forest.pkl")
+    dt_clf = load_artifact(d / "device_classifier.pkl") if (d / "device_classifier.pkl").exists() else None
+    dt_classes = load_artifact(d / "device_classes.pkl") if (d / "device_classes.pkl").exists() else []
+    autoencoder = load_artifact(d / "autoencoder.pkl") if (d / "autoencoder.pkl").exists() else None
+    autoencoder_meta = (
+        load_artifact(d / "autoencoder_meta.pkl") if (d / "autoencoder_meta.pkl").exists() else None
+    )
     return ModelBundle(
         scaler=scaler,
         isolation_forest=iforest,
         device_classifier=dt_clf,
         device_classes=list(dt_classes),
+        autoencoder=autoencoder,
+        autoencoder_meta=autoencoder_meta,
     )
 
 
@@ -77,6 +85,23 @@ def _if_score(models: ModelBundle, X_scaled: np.ndarray) -> float:
     return float(np.clip(score, 0.0, 100.0))
 
 
+def _autoencoder_score(models: ModelBundle, X_scaled: np.ndarray) -> float | None:
+    """Return optional drift score in [0, 100] from reconstruction error."""
+    if models.autoencoder is None:
+        return None
+
+    recon = models.autoencoder.predict(X_scaled)
+    err = float(np.mean((X_scaled - recon) ** 2))
+
+    meta = models.autoencoder_meta or {}
+    mean = float(meta.get("error_mean", 0.0))
+    std = float(meta.get("error_std", 1.0)) or 1.0
+    z = (err - mean) / std
+    # Keep mapping simple and deterministic around a 50 baseline.
+    score = 50.0 + z * 20.0
+    return float(np.clip(score, 0.0, 100.0))
+
+
 def _predict_device_type(models: ModelBundle, X_scaled: np.ndarray, fallback: str) -> str:
     if models.device_classifier is None or not models.device_classes:
         return fallback
@@ -96,15 +121,51 @@ def _confidence(risk: float) -> Confidence:
 
 
 def _reason_codes_and_explanations(
+    models: ModelBundle,
+    x_scaled: np.ndarray,
     features: dict[str, float],
     risk: float,
 ) -> tuple[list[str], list[str]]:
-    """Generate reason codes and human-readable explanation strings."""
+    """Generate reason codes and SHAP-like human-readable explanation strings."""
     if risk < 70:
         return [], []
 
     codes: list[str] = []
     exps: list[str] = []
+
+    # Preferred path: use SHAP if available to rank feature influence.
+    try:
+        import shap  # type: ignore[import-not-found]
+
+        explainer = shap.TreeExplainer(models.isolation_forest)
+        values = explainer.shap_values(x_scaled)
+        if isinstance(values, list):
+            vals = np.asarray(values[0]).reshape(-1)
+        else:
+            vals = np.asarray(values).reshape(-1)
+
+        ranked_idx = np.argsort(np.abs(vals))[::-1][:3]
+        for idx in ranked_idx:
+            feat = FEATURE_KEYS[int(idx)]
+            contrib = float(vals[int(idx)])
+            direction = "increased" if contrib >= 0 else "reduced"
+            codes.append(f"shap_{feat}")
+            exps.append(
+                f"SHAP indicates {feat} {direction} anomaly likelihood (contribution {contrib:+.3f})."
+            )
+    except Exception:
+        # Fallback path: rank features by normalized deviation from the scaler baseline.
+        means = np.asarray(getattr(models.scaler, "mean_", np.zeros(len(FEATURE_KEYS)))).reshape(-1)
+        scales = np.asarray(getattr(models.scaler, "scale_", np.ones(len(FEATURE_KEYS)))).reshape(-1)
+        raw = np.asarray([float(features.get(k, 0.0)) for k in FEATURE_KEYS], dtype=np.float64)
+        z = np.abs((raw - means) / np.where(scales == 0, 1.0, scales))
+        ranked_idx = np.argsort(z)[::-1][:3]
+        for idx in ranked_idx:
+            feat = FEATURE_KEYS[int(idx)]
+            codes.append(f"feature_deviation_{feat}")
+            exps.append(
+                f"{feat} deviates from baseline by z-score {float(z[int(idx)]):.2f}, raising anomaly risk."
+            )
 
     byte_vol   = float(features.get("byte_volume", 0.0))
     pkt_rate   = float(features.get("packet_rate", 0.0))
@@ -163,17 +224,23 @@ def infer_window(
     X_scaled = models.scaler.transform(X_raw)
 
     if_score = _if_score(models, X_scaled)
+    ae_score = _autoencoder_score(models, X_scaled)
     predicted_type = _predict_device_type(models, X_scaled, fallback=device_type)
-    final_risk = float(np.clip(if_score, 0.0, 100.0))
+
+    if ae_score is None:
+        final_risk = float(np.clip(if_score, 0.0, 100.0))
+    else:
+        final_risk = float(np.clip(0.7 * if_score + 0.3 * ae_score, 0.0, 100.0))
+
     conf = _confidence(final_risk)
-    codes, exps = _reason_codes_and_explanations(features, final_risk)
+    codes, exps = _reason_codes_and_explanations(models, X_scaled, features, final_risk)
 
     return ScoreResult(
         timestamp=ts,
         device_id=device_id,
         device_type=predicted_type or device_type,
         isolation_forest=if_score,
-        autoencoder=None,
+        autoencoder=ae_score,
         final_risk=final_risk,
         confidence=conf,
         reason_codes=codes,
