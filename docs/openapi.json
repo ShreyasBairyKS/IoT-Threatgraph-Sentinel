@@ -1,0 +1,791 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "IoT ThreatGraph Sentinel - API Server",
+    "description": "IoT ThreatGraph Sentinel \u2014 P3 Backend Platform.\n\nProvides REST endpoints and a WebSocket event bus for real-time alert streaming. Contract schemas are frozen per Section 4 of docs/TEAM_EXECUTION_GUIDE.md.",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/devices": {
+      "get": {
+        "tags": [
+          "devices"
+        ],
+        "summary": "Get Devices",
+        "description": "Return all known devices with their latest risk scores and status.\nServes live data from DeviceRegistry; falls back to mock if empty.",
+        "operationId": "get_devices_devices_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DeviceSummary"
+                  },
+                  "type": "array",
+                  "title": "Response Get Devices Devices Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Get Alerts",
+        "description": "Return alerts newest-first from the live store.\nPolling fallback: call every 3s if WebSocket unavailable.\nFalls back to mock data when store is empty.",
+        "operationId": "get_alerts_alerts_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AlertEvent"
+                  },
+                  "type": "array",
+                  "title": "Response Get Alerts Alerts Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/alerts/{event_id}": {
+      "get": {
+        "tags": [
+          "alerts"
+        ],
+        "summary": "Get Alert By Id",
+        "description": "Return a single alert by event_id \u2014 used by P4 drill-down panel.\nChecks live store first, then falls back to mock store.\nReturns 404 if not found in either.",
+        "operationId": "get_alert_by_id_alerts__event_id__get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlertEvent"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/graph": {
+      "get": {
+        "tags": [
+          "graph"
+        ],
+        "summary": "Get Graph",
+        "description": "Return the latest graph enrichment snapshot.\nFalls back to mock data when no P2 data has arrived yet.",
+        "operationId": "get_graph_graph_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GraphEnrichment"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/report": {
+      "post": {
+        "tags": [
+          "report"
+        ],
+        "summary": "Generate Report",
+        "description": "Generate an IncidentReport from an AlertEvent payload.\nUses the real build_report() pipeline (rule-based recommendations + MITRE merge).",
+        "operationId": "generate_report_report_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AlertEvent"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncidentReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/report/{event_id}/pdf": {
+      "get": {
+        "tags": [
+          "report"
+        ],
+        "summary": "Download Pdf",
+        "description": "Generate and download a PDF for a previously stored alert event.\n\nLooks up the alert in AlertStore by event_id, builds the report,\nexports to PDF bytes, returns as application/pdf attachment.",
+        "operationId": "download_pdf_report__event_id__pdf_get",
+        "parameters": [
+          {
+            "name": "event_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Event Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/anomaly": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Anomaly",
+        "description": "Receive an AnomalyResult from the P1 ml-worker.\n\n- If risk >= threshold \u2192 builds AlertEvent, stores it, broadcasts over WS.\n- Always upserts the DeviceRegistry with latest risk / status.\n\nReturns 202 Accepted immediately; processing happens in background.",
+        "operationId": "ingest_anomaly_ingest_anomaly_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnomalyResult"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Ingest Anomaly Ingest Anomaly Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/ingest/graph": {
+      "post": {
+        "tags": [
+          "ingest"
+        ],
+        "summary": "Ingest Graph",
+        "description": "Receive a GraphEnrichment snapshot from the P2 graph-worker.\n\nUpdates the graph store so subsequent anomaly results are enriched\nwith the latest propagation risk, attack paths, and MITRE tags.\n\nReturns 202 Accepted.",
+        "operationId": "ingest_graph_ingest_graph_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GraphEnrichment"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Ingest Graph Ingest Graph Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health",
+        "description": "Liveness probe. Returns status and app version.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "type": "object",
+                  "title": "Response Health Health Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AlertEvent": {
+        "properties": {
+          "event_type": {
+            "type": "string",
+            "const": "alert.created",
+            "title": "Event Type",
+            "default": "alert.created"
+          },
+          "event_id": {
+            "type": "string",
+            "title": "Event Id"
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "title": "Severity"
+          },
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "device_type": {
+            "type": "string",
+            "title": "Device Type"
+          },
+          "risk_score": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Risk Score"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          },
+          "mitre": {
+            "$ref": "#/components/schemas/MITRETag"
+          },
+          "graph": {
+            "$ref": "#/components/schemas/AlertGraph"
+          }
+        },
+        "type": "object",
+        "required": [
+          "event_id",
+          "timestamp",
+          "severity",
+          "device_id",
+          "device_type",
+          "risk_score",
+          "confidence",
+          "reasons",
+          "mitre",
+          "graph"
+        ],
+        "title": "AlertEvent"
+      },
+      "AlertGraph": {
+        "properties": {
+          "path": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Path"
+          },
+          "next_targets": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Next Targets"
+          }
+        },
+        "type": "object",
+        "required": [
+          "path",
+          "next_targets"
+        ],
+        "title": "AlertGraph"
+      },
+      "AnomalyResult": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "device_type": {
+            "type": "string",
+            "title": "Device Type"
+          },
+          "scores": {
+            "$ref": "#/components/schemas/AnomalyScores"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reason Codes"
+          },
+          "explanations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Explanations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "device_id",
+          "device_type",
+          "scores",
+          "reason_codes",
+          "explanations"
+        ],
+        "title": "AnomalyResult"
+      },
+      "AnomalyScores": {
+        "properties": {
+          "isolation_forest": {
+            "type": "number",
+            "title": "Isolation Forest"
+          },
+          "autoencoder": {
+            "type": "number",
+            "title": "Autoencoder"
+          },
+          "final_risk": {
+            "type": "number",
+            "title": "Final Risk"
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ],
+            "title": "Confidence"
+          }
+        },
+        "type": "object",
+        "required": [
+          "isolation_forest",
+          "autoencoder",
+          "final_risk",
+          "confidence"
+        ],
+        "title": "AnomalyScores"
+      },
+      "DeviceSummary": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "device_type": {
+            "type": "string",
+            "title": "Device Type"
+          },
+          "last_seen": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Last Seen"
+          },
+          "risk_score": {
+            "type": "number",
+            "title": "Risk Score"
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "low",
+                  "medium",
+                  "high"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "normal",
+              "suspicious",
+              "critical"
+            ],
+            "title": "Status",
+            "default": "normal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id",
+          "device_type",
+          "last_seen",
+          "risk_score"
+        ],
+        "title": "DeviceSummary"
+      },
+      "GraphEnrichment": {
+        "properties": {
+          "timestamp": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Timestamp"
+          },
+          "source_device": {
+            "type": "string",
+            "title": "Source Device"
+          },
+          "propagation_risk": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Propagation Risk"
+          },
+          "neighbors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Neighbors"
+          },
+          "next_target_prediction": {
+            "items": {
+              "$ref": "#/components/schemas/NextTargetPrediction"
+            },
+            "type": "array",
+            "title": "Next Target Prediction"
+          },
+          "attack_paths": {
+            "items": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "type": "array",
+            "title": "Attack Paths"
+          },
+          "mitre": {
+            "$ref": "#/components/schemas/MITRETag"
+          }
+        },
+        "type": "object",
+        "required": [
+          "timestamp",
+          "source_device",
+          "propagation_risk",
+          "neighbors",
+          "next_target_prediction",
+          "attack_paths",
+          "mitre"
+        ],
+        "title": "GraphEnrichment"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "IncidentEvidence": {
+        "properties": {
+          "risk_score": {
+            "type": "number",
+            "title": "Risk Score"
+          },
+          "explanations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Explanations"
+          },
+          "mitre": {
+            "items": {
+              "$ref": "#/components/schemas/MITRETag"
+            },
+            "type": "array",
+            "title": "Mitre"
+          }
+        },
+        "type": "object",
+        "required": [
+          "risk_score",
+          "explanations",
+          "mitre"
+        ],
+        "title": "IncidentEvidence"
+      },
+      "IncidentReport": {
+        "properties": {
+          "report_id": {
+            "type": "string",
+            "title": "Report Id"
+          },
+          "generated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Generated At"
+          },
+          "incident_summary": {
+            "type": "string",
+            "title": "Incident Summary"
+          },
+          "affected_devices": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Affected Devices"
+          },
+          "evidence": {
+            "$ref": "#/components/schemas/IncidentEvidence"
+          },
+          "recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recommendations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "report_id",
+          "generated_at",
+          "incident_summary",
+          "affected_devices",
+          "evidence",
+          "recommendations"
+        ],
+        "title": "IncidentReport"
+      },
+      "MITRETag": {
+        "properties": {
+          "tactic": {
+            "type": "string",
+            "title": "Tactic"
+          },
+          "technique": {
+            "type": "string",
+            "title": "Technique"
+          }
+        },
+        "type": "object",
+        "required": [
+          "tactic",
+          "technique"
+        ],
+        "title": "MITRETag"
+      },
+      "NextTargetPrediction": {
+        "properties": {
+          "device_id": {
+            "type": "string",
+            "title": "Device Id"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score"
+          },
+          "why": {
+            "type": "string",
+            "title": "Why"
+          }
+        },
+        "type": "object",
+        "required": [
+          "device_id",
+          "score",
+          "why"
+        ],
+        "title": "NextTargetPrediction"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    }
+  }
+}
