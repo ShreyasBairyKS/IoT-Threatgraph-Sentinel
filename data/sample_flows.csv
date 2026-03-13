@@ -1,0 +1,6 @@
+src_ip,dst_ip,flow_duration,packet_rate,byte_volume
+cam-001,router-02,1.24,52.1,81234
+router-02,nvr-01,0.5,100.2,4000
+router-02,sensor-07,0.8,12.5,500
+cam-001,sensor-07,0.1,5.0,200
+nvr-01,storage-server,5.0,200.0,1000000

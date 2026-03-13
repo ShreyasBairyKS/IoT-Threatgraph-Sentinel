@@ -1,0 +1,21 @@
+[
+    {
+        "timestamp": "2026-03-12T09:01:00Z",
+        "device_id": "cam-001",
+        "device_type": "camera",
+        "scores": {
+            "isolation_forest": 78.4,
+            "autoencoder": 64.2,
+            "final_risk": 73.1,
+            "confidence": "high"
+        },
+        "reason_codes": [
+            "outbound_volume_spike",
+            "dest_ip_diversity_jump"
+        ],
+        "explanations": [
+            "Outbound traffic is 6.8x above rolling baseline",
+            "Unique destination IP count increased from 2 to 9"
+        ]
+    }
+]
