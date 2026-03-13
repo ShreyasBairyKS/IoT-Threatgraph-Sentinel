@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import cytoscape from 'cytoscape';
 import type { Core, ElementDefinition, StylesheetJson } from 'cytoscape';
 import { GitBranch } from 'lucide-react';
@@ -18,10 +18,10 @@ function buildElements(
   devices: Device[],
   enrichment: GraphEnrichment,
   attackPath: string[],
+  activeNodeId: string | null,
 ): ElementDefinition[] {
   const nodeIds = new Set(devices.map((d) => d.device_id));
 
-  // Ensure all devices mentioned in enrichment exist as nodes
   const extraIds: string[] = [
     enrichment.source_device,
     ...enrichment.neighbors,
@@ -42,11 +42,12 @@ function buildElements(
         risk,
         colour: nodeColor(risk),
         inPath: attackPath.includes(id),
+        isActive: id === activeNodeId,
       },
     };
   });
 
-  // Edges: source → each neighbor
+  // Source → neighbor edges
   const edges: ElementDefinition[] = enrichment.neighbors.map((n, i) => ({
     data: {
       id: `e-${enrichment.source_device}-${n}-${i}`,
@@ -59,8 +60,7 @@ function buildElements(
   // Attack path chain edges
   for (let i = 0; i < attackPath.length - 1; i++) {
     const edgeId = `e-ap-${attackPath[i]}-${attackPath[i + 1]}`;
-    const exists = edges.some((e) => e.data?.id === edgeId);
-    if (!exists) {
+    if (!edges.some((e) => e.data?.id === edgeId)) {
       edges.push({
         data: { id: edgeId, source: attackPath[i], target: attackPath[i + 1], suspicious: true },
       });
@@ -88,6 +88,8 @@ const CY_STYLE: StylesheetJson = [
       'border-color': '#1a1a1f',
       'text-outline-width': 2,
       'text-outline-color': '#09090b',
+      'transition-property': 'border-color, border-width, width, height',
+      'transition-duration': '0.3s' as unknown as number,
     },
   },
   {
@@ -97,6 +99,16 @@ const CY_STYLE: StylesheetJson = [
       'border-width': 3,
       'width': 40,
       'height': 40,
+    },
+  },
+  {
+    // Active replay node: bright indigo ring + bigger
+    selector: 'node[?isActive]',
+    style: {
+      'border-color': '#818cf8',
+      'border-width': 4,
+      'width': 44,
+      'height': 44,
     },
   },
   {
@@ -119,6 +131,7 @@ const CY_STYLE: StylesheetJson = [
       'opacity': 1,
       'line-style': 'dashed',
       'line-dash-pattern': [6, 3],
+      // Cytoscape does not support CSS animations; we animate via RAF below.
     },
   },
   {
@@ -127,29 +140,54 @@ const CY_STYLE: StylesheetJson = [
   },
 ];
 
+// ── Suspicious-edge marching-ants animation via requestAnimationFrame ────
+let _animFrame: number | null = null;
+let _dashOffset = 0;
+
+function startEdgeAnimation(cy: Core) {
+  if (_animFrame !== null) return;           // already running
+  const step = () => {
+    _dashOffset = (_dashOffset + 0.5) % 100;
+    cy.edges('[?suspicious]').style({
+      'line-dash-offset': -_dashOffset,
+    } as Record<string, unknown>);
+    _animFrame = requestAnimationFrame(step);
+  };
+  _animFrame = requestAnimationFrame(step);
+}
+
+function stopEdgeAnimation() {
+  if (_animFrame !== null) {
+    cancelAnimationFrame(_animFrame);
+    _animFrame = null;
+  }
+}
+
 // ── Component ────────────────────────────────────────────────────────────
 interface ThreatGraphProps {
   devices: Device[];
   enrichment: GraphEnrichment;
   onNodeClick: (deviceId: string) => void;
+  /** Device id to highlight as the currently replaying / clicked node. */
+  activeNodeId?: string | null;
 }
 
-export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphProps) {
+export function ThreatGraph({ devices, enrichment, onNodeClick, activeNodeId = null }: ThreatGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
 
-  const attackPath = enrichment.attack_paths[0] ?? [];
+  const attackPath = useMemo(() => enrichment.attack_paths[0] ?? [], [enrichment.attack_paths]);
 
+  // ── Initial mount ──────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const elements = buildElements(devices, enrichment, attackPath);
+    const elements = buildElements(devices, enrichment, attackPath, activeNodeId);
 
     const cy = cytoscape({
       container: containerRef.current,
       elements,
       style: CY_STYLE,
-      // ✅ Built-in cose layout — no external plugin needed
       layout: {
         name: 'cose',
         animate: true,
@@ -173,18 +211,61 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
     });
 
     cyRef.current = cy;
-    return () => cy.destroy();
+    startEdgeAnimation(cy);
+
+    return () => {
+      stopEdgeAnimation();
+      cy.destroy();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Update when data changes
+  // ── Update graph when enrichment / devices change ─────────────────────
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
     cy.elements().remove();
-    cy.add(buildElements(devices, enrichment, attackPath));
+    cy.add(buildElements(devices, enrichment, attackPath, activeNodeId));
     cy.layout({ name: 'cose', animate: true, padding: 40, fit: true }).run();
+    // Restart the animation on the new suspicious edges
+    stopEdgeAnimation();
+    startEdgeAnimation(cy);
   }, [devices, enrichment]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Highlight active replay node without full rebuild ────────────────
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    // Clear all active flags
+    cy.nodes().data('isActive', false);
+    if (activeNodeId) {
+      const node = cy.getElementById(activeNodeId);
+      if (node.length) {
+        node.data('isActive', true);
+        // Flash style immediately
+        node.style({
+          'border-color': '#818cf8',
+          'border-width': 4,
+          'width': 44,
+          'height': 44,
+        });
+        // Reset non-active nodes
+        cy.nodes().not(node).style({
+          'border-width': 2,
+          'border-color': '#1a1a1f',
+          'width': 32,
+          'height': 32,
+        });
+        // Keep inPath styling for path nodes
+        attackPath.forEach((id) => {
+          const pn = cy.getElementById(id);
+          if (pn.length && id !== activeNodeId) {
+            pn.style({ 'border-color': '#ef4444', 'border-width': 3, 'width': 40, 'height': 40 });
+          }
+        });
+      }
+    }
+  }, [activeNodeId, attackPath]);
 
   const propagationPct = Math.round(enrichment.propagation_risk * 100);
 
@@ -249,6 +330,30 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
               {label}
             </div>
           ))}
+        </div>
+
+        {/* Animation legend */}
+        <div style={{
+          position: 'absolute', bottom: 10, right: 12,
+          background: 'rgba(9,9,11,0.85)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          padding: '6px 10px',
+          fontSize: 10,
+          backdropFilter: 'blur(8px)',
+          color: 'var(--text-secondary)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 3,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 16, borderTop: '2px dashed #ef4444' }} />
+            Suspicious edge
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', border: '3px solid #818cf8', background: 'transparent' }} />
+            Active node
+          </div>
         </div>
       </div>
     </div>

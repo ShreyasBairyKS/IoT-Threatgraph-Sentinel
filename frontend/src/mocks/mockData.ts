@@ -174,13 +174,65 @@ export const MOCK_INCIDENT_REPORT: IncidentReport = {
   ],
 };
 
-// ── Risk trend data for device drill-down chart ──────────────────────────
-export const MOCK_RISK_TREND: { time: string; risk: number }[] = [
-  { time: '10:50', risk: 12 },
-  { time: '10:52', risk: 18 },
-  { time: '10:54', risk: 25 },
-  { time: '10:56', risk: 42 },
-  { time: '10:58', risk: 63 },
-  { time: '11:00', risk: 78 },
-  { time: '11:01', risk: 87 },
-];
+// ── Per-device risk trend data for drill-down charts ────────────────────
+// Each entry is a 10-minute window sampled at 2-minute intervals.
+// Replace with live /devices/{id}/trend data when P3 wires it up.
+export const MOCK_RISK_TRENDS: Record<string, { time: string; risk: number }[]> = {
+  'cam-001': [
+    { time: '10:50', risk: 12 },
+    { time: '10:52', risk: 18 },
+    { time: '10:54', risk: 25 },
+    { time: '10:56', risk: 42 },
+    { time: '10:58', risk: 63 },
+    { time: '11:00', risk: 78 },
+    { time: '11:01', risk: 87 },
+  ],
+  'router-02': [
+    { time: '10:50', risk: 8 },
+    { time: '10:52', risk: 14 },
+    { time: '10:54', risk: 22 },
+    { time: '10:56', risk: 35 },
+    { time: '10:58', risk: 48 },
+    { time: '11:00', risk: 56 },
+    { time: '11:01', risk: 61 },
+  ],
+  'nvr-01': [
+    { time: '10:50', risk: 10 },
+    { time: '10:52', risk: 16 },
+    { time: '10:54', risk: 28 },
+    { time: '10:56', risk: 36 },
+    { time: '10:58', risk: 44 },
+    { time: '11:00', risk: 51 },
+    { time: '11:01', risk: 54 },
+  ],
+  'sensor-07': [
+    { time: '10:50', risk: 5 },
+    { time: '10:52', risk: 7 },
+    { time: '10:54', risk: 8 },
+    { time: '10:56', risk: 10 },
+    { time: '10:58', risk: 11 },
+    { time: '11:00', risk: 12 },
+    { time: '11:01', risk: 12 },
+  ],
+  'access-ctrl-01': [
+    { time: '10:50', risk: 14 },
+    { time: '10:52', risk: 18 },
+    { time: '10:54', risk: 22 },
+    { time: '10:56', risk: 26 },
+    { time: '10:58', risk: 30 },
+    { time: '11:00', risk: 33 },
+    { time: '11:01', risk: 34 },
+  ],
+  'thermostat-03': [
+    { time: '10:50', risk: 3 },
+    { time: '10:52', risk: 4 },
+    { time: '10:54', risk: 5 },
+    { time: '10:56', risk: 6 },
+    { time: '10:58', risk: 7 },
+    { time: '11:00', risk: 8 },
+    { time: '11:01', risk: 8 },
+  ],
+};
+
+/** @deprecated Use MOCK_RISK_TRENDS['cam-001'] or look up by device_id. */
+export const MOCK_RISK_TREND = MOCK_RISK_TRENDS['cam-001'];

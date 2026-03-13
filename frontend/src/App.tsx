@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import './index.css';
 
 import { DeviceList } from './components/DeviceList';
@@ -8,76 +8,106 @@ import { IncidentPanel } from './components/IncidentPanel';
 import { ReplayTimeline } from './components/ReplayTimeline';
 import { buildReplayFrames } from './components/replayUtils';
 
-import { MockWebSocket } from './mocks/mockWebSocket';
-import {
-  MOCK_DEVICES,
-  MOCK_ALERTS,
-  MOCK_GRAPH_ENRICHMENT,
-} from './mocks/mockData';
+import { useAlertStream } from './hooks/useAlertStream';
+import { MOCK_DEVICES, MOCK_GRAPH_ENRICHMENT, MOCK_RISK_TRENDS } from './mocks/mockData';
 
-import type { AlertEvent, Device } from './types/contracts';
-import { Activity, Wifi } from 'lucide-react';
+import type { AlertEvent, Device, GraphEnrichment } from './types/contracts';
+import { Activity, Wifi, WifiOff } from 'lucide-react';
+
+// ── Derive graph enrichment from a live alert's graph payload ─────────────
+function enrichmentFromAlert(alert: AlertEvent, fallback: GraphEnrichment): GraphEnrichment {
+  if (!alert.graph?.path?.length) return fallback;
+  return {
+    ...fallback,
+    timestamp: alert.timestamp,
+    source_device: alert.device_id,
+    attack_paths: [alert.graph.path],
+    next_target_prediction: alert.graph.next_targets.map((id) => ({
+      device_id: id,
+      score: 0.75,
+      why: 'propagation path detected',
+    })),
+    mitre: alert.mitre,
+  };
+}
 
 // ── App ────────────────────────────────────────────────────────────────────
 export default function App() {
-  // State
-  const [alerts, setAlerts] = useState<AlertEvent[]>(MOCK_ALERTS);
-  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
-  const [latestAlert, setLatestAlert] = useState<AlertEvent | null>(MOCK_ALERTS[0] ?? null);
-  const [replayIndex, setReplayIndex] = useState(0);
-  const wsStatus: 'live' | 'mock' = 'mock';
+  const { alerts, wsStatus } = useAlertStream();
 
-  // Build replay frames from alerts
+  const devices = alerts.reduce<Device[]>((acc, alert) => {
+    const existing = acc.find((d) => d.device_id === alert.device_id);
+    if (existing) {
+      if (alert.risk_score > existing.risk_score) {
+        existing.risk_score = alert.risk_score;
+        existing.confidence = alert.confidence;
+      }
+      existing.last_seen = alert.timestamp;
+      existing.status = alert.risk_score >= 80
+        ? 'critical'
+        : alert.risk_score >= 40
+          ? 'suspicious'
+          : 'normal';
+      return acc;
+    }
+
+    const knownDevice = MOCK_DEVICES.find((d) => d.device_id === alert.device_id);
+    acc.push(knownDevice ?? {
+      device_id: alert.device_id,
+      device_type: alert.device_type,
+      risk_score: alert.risk_score,
+      confidence: alert.confidence,
+      last_seen: alert.timestamp,
+      status: alert.risk_score >= 80
+        ? 'critical'
+        : alert.risk_score >= 40
+          ? 'suspicious'
+          : 'normal',
+    });
+    return acc;
+  }, [...MOCK_DEVICES]);
+
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  const [latestAlert, setLatestAlert] = useState<AlertEvent | null>(alerts[0] ?? null);
+  const [replayIndex, setReplayIndex] = useState(0);
+  const [activeNodeId, setActiveNodeId] = useState<string | null>(null);
+
+  // Build replay frames from alerts (sorted by timestamp asc)
   const replayFrames = buildReplayFrames(alerts);
 
-  // Mock WebSocket
-  const wsRef = useRef<MockWebSocket | null>(null);
+  // Derive enrichment from latest alert's graph data (fallback to mock)
+  const activeEnrichment = latestAlert
+    ? enrichmentFromAlert(latestAlert, MOCK_GRAPH_ENRICHMENT)
+    : MOCK_GRAPH_ENRICHMENT;
 
-  useEffect(() => {
-    const ws = new MockWebSocket();
-    wsRef.current = ws;
-
-    ws.onAlert((evt) => {
-      setAlerts((prev) => {
-        // Avoid duplicate event IDs
-        if (prev.some((a) => a.event_id === evt.event_id && a.timestamp === evt.timestamp)) {
-          // Create a unique copy by bumping timestamp slightly
-          const next: AlertEvent = {
-            ...evt,
-            event_id: `${evt.event_id}_${Date.now()}`,
-            timestamp: new Date().toISOString(),
-          };
-          return [next, ...prev].slice(0, 50);
-        }
-        setLatestAlert(evt);
-        return [evt, ...prev].slice(0, 50);
-      });
-    });
-
-    ws.connect(5000); // new alert every 5 seconds
-    return () => ws.disconnect();
-  }, []);
+  // Per-device risk trend (falls back to cam-001 data if unknown device)
+  const deviceTrend = selectedDevice
+    ? (MOCK_RISK_TRENDS[selectedDevice.device_id] ?? MOCK_RISK_TRENDS['cam-001'])
+    : undefined;
 
   // Node click from graph → open IncidentPanel
   const handleNodeClick = useCallback((deviceId: string) => {
-    const device = MOCK_DEVICES.find((d) => d.device_id === deviceId) ?? null;
+    const device = devices.find((d) => d.device_id === deviceId) ?? null;
     setSelectedDevice(device);
     const deviceAlert = alerts.find((a) => a.device_id === deviceId) ?? null;
     if (deviceAlert) setLatestAlert(deviceAlert);
-  }, [alerts]);
+    setActiveNodeId(deviceId);
+  }, [alerts, devices]);
 
   // Alert click → open IncidentPanel for that device
   const handleAlertClick = useCallback((alert: AlertEvent) => {
-    const device = MOCK_DEVICES.find((d) => d.device_id === alert.device_id) ?? null;
+    const device = devices.find((d) => d.device_id === alert.device_id) ?? null;
     setSelectedDevice(device);
     setLatestAlert(alert);
-  }, []);
+    setActiveNodeId(alert.device_id);
+  }, [devices]);
 
   // Device click from list → open IncidentPanel
   const handleDeviceSelect = useCallback((device: Device) => {
     setSelectedDevice(device);
     const deviceAlert = alerts.find((a) => a.device_id === device.device_id) ?? null;
     if (deviceAlert) setLatestAlert(deviceAlert);
+    setActiveNodeId(device.device_id);
   }, [alerts]);
 
   // Replay-index change → highlight the alert at that frame
@@ -85,6 +115,7 @@ export default function App() {
     setReplayIndex(index);
     const frame = replayFrames[index];
     if (!frame) return;
+    setActiveNodeId(frame.label);
     const correspondingAlert = alerts.find((a) => a.device_id === frame.label) ?? null;
     if (correspondingAlert) {
       setLatestAlert(correspondingAlert);
@@ -93,8 +124,17 @@ export default function App() {
     }
   }, [replayFrames, alerts]);
 
-  // Determine graph enrichment for current replay frame
-  const activeEnrichment = MOCK_GRAPH_ENRICHMENT;
+  // ── WS status indicator ──────────────────────────────────────────────────
+  const wsColor =
+    wsStatus === 'live' ? 'var(--risk-low)'
+    : wsStatus === 'mock' ? 'var(--risk-medium)'
+    : 'var(--risk-critical)';
+
+  const wsLabel =
+    wsStatus === 'live' ? 'Live WS'
+    : wsStatus === 'connecting' ? 'Connecting…'
+    : wsStatus === 'error' ? 'WS Error'
+    : 'Mock WS';
 
   return (
     <div className="app-shell">
@@ -111,8 +151,10 @@ export default function App() {
             {alerts.length} alerts
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Wifi size={12} style={{ color: 'var(--risk-low)' }} />
-            <span style={{ color: 'var(--risk-low)' }}>{wsStatus === 'mock' ? 'Mock WS' : 'Live WS'}</span>
+            {wsStatus === 'live'
+              ? <Wifi size={12} style={{ color: wsColor }} />
+              : <WifiOff size={12} style={{ color: wsColor }} />}
+            <span style={{ color: wsColor }}>{wsLabel}</span>
           </span>
           <span className="mono" style={{ fontSize: 11 }}>
             {new Date().toLocaleTimeString()}
@@ -125,24 +167,26 @@ export default function App() {
         <div className="main-content" style={{ flex: 1 }}>
           {/* Left: Device List */}
           <DeviceList
-            devices={MOCK_DEVICES}
+            devices={devices}
             selectedId={selectedDevice?.device_id ?? null}
             onSelect={handleDeviceSelect}
           />
 
           {/* Center: Threat Graph */}
           <ThreatGraph
-            devices={MOCK_DEVICES}
+            devices={devices}
             enrichment={activeEnrichment}
             onNodeClick={handleNodeClick}
+            activeNodeId={activeNodeId}
           />
 
-          {/* Right: Incident Panel (drill-down) or Alert Feed toggle */}
+          {/* Right: Incident Panel (drill-down) or Alert Feed */}
           {selectedDevice ? (
             <IncidentPanel
               device={selectedDevice}
               latestAlert={latestAlert}
-              onClose={() => setSelectedDevice(null)}
+              riskTrend={deviceTrend}
+              onClose={() => { setSelectedDevice(null); setActiveNodeId(null); }}
             />
           ) : (
             <AlertFeed

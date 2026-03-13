@@ -1,16 +1,18 @@
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { X, Shield, Target, ArrowRight } from 'lucide-react';
+import { X, Shield, Target, ArrowRight, Crosshair } from 'lucide-react';
 import type { Device, AlertEvent, IncidentReport } from '../types/contracts';
-import { MOCK_RISK_TREND, MOCK_INCIDENT_REPORT } from '../mocks/mockData';
+import { MOCK_INCIDENT_REPORT, MOCK_RISK_TRENDS } from '../mocks/mockData';
 
 interface IncidentPanelProps {
   device: Device | null;
   latestAlert: AlertEvent | null;
+  /** Per-device risk trend. Falls back to device-keyed mock if not provided. */
+  riskTrend?: { time: string; risk: number }[];
   onClose: () => void;
 }
 
-export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelProps) {
+export function IncidentPanel({ device, latestAlert, riskTrend, onClose }: IncidentPanelProps) {
   const report: IncidentReport = MOCK_INCIDENT_REPORT;
 
   if (!device) {
@@ -39,6 +41,17 @@ export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelPro
     : riskClass === 'high' ? '#f97316'
     : riskClass === 'medium' ? '#eab308'
     : '#22c55e';
+
+  // Use prop trend → device-keyed mock → cam-001 fallback
+  const trendData = riskTrend
+    ?? MOCK_RISK_TRENDS[device.device_id]
+    ?? MOCK_RISK_TRENDS['cam-001'];
+
+  const evidence = {
+    risk_score: latestAlert?.risk_score ?? report.evidence.risk_score,
+    explanations: latestAlert?.reasons?.length ? latestAlert.reasons : report.evidence.explanations,
+    mitre: latestAlert?.mitre ? [latestAlert.mitre] : report.evidence.mitre,
+  };
 
   return (
     <div className="panel">
@@ -71,11 +84,11 @@ export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelPro
           </div>
         </div>
 
-        {/* Trend chart */}
+        {/* Trend chart — device-specific */}
         <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '12px 8px 8px', border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, paddingLeft: 4 }}>Risk Trend (last 10 min)</div>
           <ResponsiveContainer width="100%" height={90}>
-            <AreaChart data={MOCK_RISK_TREND} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+            <AreaChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
                 <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={chartColor} stopOpacity={0.4} />
@@ -110,6 +123,27 @@ export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelPro
           </div>
         )}
 
+        {/* Evidence panel */}
+        <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>Evidence</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Risk score</span>
+            <span style={{ fontWeight: 600, color: chartColor }}>{evidence.risk_score}</span>
+          </div>
+          {evidence.explanations.map((item, index) => (
+            <div key={`${item}-${index}`} style={{ fontSize: 12, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', gap: 6 }}>
+              <span style={{ color: 'var(--brand-from)' }}>•</span> {item}
+            </div>
+          ))}
+          <div style={{ marginTop: 8, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {evidence.mitre.map((tag, index) => (
+              <span key={`${tag.technique}-${index}`} className="mitre-chip">
+                {tag.tactic} · {tag.technique}
+              </span>
+            ))}
+          </div>
+        </div>
+
         {/* Attack path */}
         {latestAlert && (
           <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid rgba(239,68,68,0.25)' }}>
@@ -126,9 +160,31 @@ export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelPro
                 </React.Fragment>
               ))}
             </div>
+
+            {/* Next targets block — Day 3 addition */}
             {latestAlert.graph.next_targets.length > 0 && (
-              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
-                Next targets: <strong style={{ color: 'var(--risk-high)' }}>{latestAlert.graph.next_targets.join(', ')}</strong>
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Crosshair size={11} style={{ color: 'var(--risk-high)' }} /> Next Likely Targets
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {latestAlert.graph.next_targets.map((t) => (
+                    <span
+                      key={t}
+                      className="mono"
+                      style={{
+                        fontSize: 11,
+                        padding: '3px 8px',
+                        borderRadius: 4,
+                        background: 'rgba(249,115,22,0.1)',
+                        border: '1px solid rgba(249,115,22,0.3)',
+                        color: 'var(--risk-high)',
+                      }}
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>
