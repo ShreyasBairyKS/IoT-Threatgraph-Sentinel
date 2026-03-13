@@ -1,12 +1,13 @@
 """
 routers/devices.py - GET /devices endpoint.
 
-Returns the list of known IoT devices and their current risk status.
-Day 1: returns mock data. Day 3: wires to real P1/P2 scoring outputs.
+Day 2+: serves from live DeviceRegistry (populated via POST /ingest/anomaly).
+Falls back to mock data when registry is empty so P4 is never blocked.
 """
 
 from fastapi import APIRouter
 from backend.contracts import DeviceSummary
+from backend.store import device_registry
 from backend.mocks.mock_store import MOCK_DEVICES
 
 router = APIRouter(prefix="/devices", tags=["devices"])
@@ -16,5 +17,7 @@ router = APIRouter(prefix="/devices", tags=["devices"])
 async def get_devices() -> list[DeviceSummary]:
     """
     Return all known devices with their latest risk scores and status.
+    Serves live data from DeviceRegistry; falls back to mock if empty.
     """
-    return MOCK_DEVICES
+    live = await device_registry.get_all()
+    return live if live else MOCK_DEVICES

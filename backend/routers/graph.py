@@ -1,12 +1,13 @@
 """
 routers/graph.py - GET /graph endpoint.
 
-Returns current graph enrichment payload from P2.
-Day 1: returns mock data. Day 3: wires to real graph-worker output.
+Day 2+: serves from live GraphStore (populated via POST /ingest/graph).
+Falls back to mock data when no P2 enrichment has arrived yet.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from backend.contracts import GraphEnrichment
+from backend.store import graph_store
 from backend.mocks.mock_store import MOCK_GRAPH
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -15,7 +16,8 @@ router = APIRouter(prefix="/graph", tags=["graph"])
 @router.get("", response_model=GraphEnrichment)
 async def get_graph() -> GraphEnrichment:
     """
-    Return the latest graph enrichment snapshot including propagation
-    risk, attack paths, next-target predictions, and MITRE tags.
+    Return the latest graph enrichment snapshot.
+    Falls back to mock data when no P2 data has arrived yet.
     """
-    return MOCK_GRAPH
+    live = await graph_store.get()
+    return live if live else MOCK_GRAPH

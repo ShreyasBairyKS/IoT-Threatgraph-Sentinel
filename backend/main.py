@@ -28,6 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import settings
 from backend.routers import devices, alerts, graph, report
+from backend.routers import ingest
 from backend.ws.broadcaster import manager, ws_alert_endpoint, mock_broadcast_loop
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
@@ -81,6 +82,7 @@ app.include_router(devices.router)
 app.include_router(alerts.router)
 app.include_router(graph.router)
 app.include_router(report.router)
+app.include_router(ingest.router)
 
 
 # ---------------------------------------------------------------------------
