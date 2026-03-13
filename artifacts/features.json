@@ -1,0 +1,84 @@
+{
+  "windows": [
+    {
+      "window_start": "2026-03-13T07:45:00Z",
+      "window_end": "2026-03-13T07:46:00Z",
+      "device_id": "cam-001",
+      "features": {
+        "flow_duration_mean": 1.2433333333333334,
+        "packet_rate": 52.43333333333334,
+        "byte_volume": 81854.66666666667,
+        "port_entropy": 2.216666666666667,
+        "unique_dest_ips": 9.333333333333334,
+        "tcp_ratio": 0.6333333333333333,
+        "udp_ratio": 0.35666666666666663,
+        "iat_mean": 0.09166666666666667,
+        "iat_std": 0.03166666666666667
+      }
+    },
+    {
+      "window_start": "2026-03-13T07:45:00Z",
+      "window_end": "2026-03-13T07:46:00Z",
+      "device_id": "sensor-07",
+      "features": {
+        "flow_duration_mean": 0.46499999999999997,
+        "packet_rate": 3.25,
+        "byte_volume": 1400.0,
+        "port_entropy": 0.11,
+        "unique_dest_ips": 1.0,
+        "tcp_ratio": 0.89,
+        "udp_ratio": 0.11,
+        "iat_mean": 0.3025,
+        "iat_std": 0.0045000000000000005
+      }
+    },
+    {
+      "window_start": "2026-03-13T07:45:00Z",
+      "window_end": "2026-03-13T07:46:00Z",
+      "device_id": "router-02",
+      "features": {
+        "flow_duration_mean": 0.8049999999999999,
+        "packet_rate": 29.35,
+        "byte_volume": 43550.0,
+        "port_entropy": 1.78,
+        "unique_dest_ips": 5.5,
+        "tcp_ratio": 0.71,
+        "udp_ratio": 0.28,
+        "iat_mean": 0.1475,
+        "iat_std": 0.019
+      }
+    },
+    {
+      "window_start": "2026-03-13T07:45:00Z",
+      "window_end": "2026-03-13T07:46:00Z",
+      "device_id": "nvr-01",
+      "features": {
+        "flow_duration_mean": 0.98,
+        "packet_rate": 18.85,
+        "byte_volume": 36400.0,
+        "port_entropy": 1.24,
+        "unique_dest_ips": 3.0,
+        "tcp_ratio": 0.79,
+        "udp_ratio": 0.2,
+        "iat_mean": 0.195,
+        "iat_std": 0.013000000000000001
+      }
+    },
+    {
+      "window_start": "2026-03-13T07:45:00Z",
+      "window_end": "2026-03-13T07:46:00Z",
+      "device_id": "access-ctrl-01",
+      "features": {
+        "flow_duration_mean": 0.6,
+        "packet_rate": 8.5,
+        "byte_volume": 9800.0,
+        "port_entropy": 0.55,
+        "unique_dest_ips": 2.0,
+        "tcp_ratio": 0.85,
+        "udp_ratio": 0.14,
+        "iat_mean": 0.25,
+        "iat_std": 0.008
+      }
+    }
+  ]
+}
