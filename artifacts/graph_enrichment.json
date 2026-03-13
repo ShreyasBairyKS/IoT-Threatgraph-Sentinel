@@ -1,35 +1,74 @@
-{
-  "timestamp": "2026-03-12T09:01:00Z",
-  "source_device": "cam-001",
-  "propagation_risk": 0.464,
-  "neighbors": [
-    "router-02",
-    "sensor-07"
-  ],
-  "next_target_prediction": [
-    {
-      "device_id": "sensor-07",
-      "score": 0.256,
-      "why": "frequent bidirectional flow"
-    },
-    {
-      "device_id": "router-02",
-      "score": 0.18,
-      "why": "frequent bidirectional flow"
+[
+  {
+    "timestamp": "2026-03-13T10:22:37Z",
+    "source_device": "cam-001",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
+    "mitre": {
+      "tactic": "Exfiltration",
+      "technique": "T1048"
     }
-  ],
-  "attack_paths": [
-    [
-      "cam-001",
-      "router-02"
-    ],
-    [
-      "cam-001",
-      "sensor-07"
-    ]
-  ],
-  "mitre": {
-    "tactic": "Exfiltration",
-    "technique": "T1048"
+  },
+  {
+    "timestamp": "2026-03-13T10:22:37Z",
+    "source_device": "sensor-07",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
+    "mitre": {
+      "tactic": "Impact",
+      "technique": "T1489"
+    }
+  },
+  {
+    "timestamp": "2026-03-13T10:22:37Z",
+    "source_device": "router-02",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
+    "mitre": {
+      "tactic": "Exfiltration",
+      "technique": "T1048"
+    }
+  },
+  {
+    "timestamp": "2026-03-13T10:22:37Z",
+    "source_device": "nvr-01",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
+    "mitre": {
+      "tactic": "Exfiltration",
+      "technique": "T1048"
+    }
+  },
+  {
+    "timestamp": "2026-03-13T10:22:37Z",
+    "source_device": "access-ctrl-01",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
+    "mitre": {
+      "tactic": "Exfiltration",
+      "technique": "T1048"
+    }
+  },
+  {
+    "timestamp": "2026-03-13T10:22:37Z",
+    "source_device": "src_ip",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
+    "mitre": {
+      "tactic": "Impact",
+      "technique": "T1489"
+    }
   }
-}
+]

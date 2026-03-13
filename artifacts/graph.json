@@ -2,48 +2,6 @@
   "directed": true,
   "multigraph": false,
   "graph": {},
-  "nodes": [
-    {
-      "id": "cam-001"
-    },
-    {
-      "id": "router-02"
-    },
-    {
-      "id": "nvr-01"
-    },
-    {
-      "id": "sensor-07"
-    },
-    {
-      "id": "storage-server"
-    }
-  ],
-  "links": [
-    {
-      "weight": 1,
-      "source": "cam-001",
-      "target": "router-02"
-    },
-    {
-      "weight": 1,
-      "source": "cam-001",
-      "target": "sensor-07"
-    },
-    {
-      "weight": 1,
-      "source": "router-02",
-      "target": "nvr-01"
-    },
-    {
-      "weight": 1,
-      "source": "router-02",
-      "target": "sensor-07"
-    },
-    {
-      "weight": 1,
-      "source": "nvr-01",
-      "target": "storage-server"
-    }
-  ]
+  "nodes": [],
+  "links": []
 }

@@ -92,8 +92,11 @@ def process_anomalies(graph_path: str, scores_path: str, output_path: str):
     enrichments = []
     # If scores is a list of results
     if isinstance(scores_data, dict):
-        scores_data = [scores_data] # Force to list if single dict
-        
+        if "items" in scores_data:
+            scores_data = scores_data["items"]
+        else:
+            scores_data = [scores_data] # Force to list if single dict
+            
     for raw_result in scores_data:
         try:
             result = AnomalyResult(**raw_result)
