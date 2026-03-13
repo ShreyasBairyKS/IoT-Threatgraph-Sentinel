@@ -36,17 +36,16 @@ Returns current device snapshot with risk metadata.
 ### Response
 
 ```json
-{
-  "items": [
-    {
-      "device_id": "cam-001",
-      "device_type": "camera",
-      "risk_score": 87,
-      "confidence": "high",
-      "last_seen": "2026-03-12T09:10:00Z"
-    }
-  ]
-}
+[
+  {
+    "device_id": "cam-001",
+    "device_type": "camera",
+    "last_seen": "2026-03-12T09:10:00Z",
+    "risk_score": 87,
+    "confidence": "high",
+    "status": "critical"
+  }
+]
 ```
 
 ---
@@ -58,25 +57,30 @@ Returns latest enriched alert events.
 ### Response
 
 ```json
-{
-  "items": [
-    {
-      "event_id": "evt_4f20",
-      "timestamp": "2026-03-12T09:10:07Z",
-      "severity": "high",
-      "device_id": "cam-001",
-      "risk_score": 87,
-      "mitre": {
-        "tactic": "Lateral Movement",
-        "technique": "T1021"
-      },
-      "reasons": [
-        "Outbound traffic is 6.8x above rolling baseline",
-        "Likely propagation path detected"
-      ]
+[
+  {
+    "event_type": "alert.created",
+    "event_id": "evt_4f20",
+    "timestamp": "2026-03-12T09:10:07Z",
+    "severity": "high",
+    "device_id": "cam-001",
+    "device_type": "camera",
+    "risk_score": 87,
+    "confidence": "high",
+    "reasons": [
+      "Outbound traffic is 6.8x above rolling baseline",
+      "Likely propagation path detected"
+    ],
+    "mitre": {
+      "tactic": "Lateral Movement",
+      "technique": "T1021"
+    },
+    "graph": {
+      "path": ["cam-001", "router-02", "access-ctrl-01"],
+      "next_targets": ["router-02", "nvr-01"]
     }
-  ]
-}
+  }
+]
 ```
 
 ---
@@ -89,16 +93,17 @@ Returns graph nodes, edges, and optional replay frame metadata.
 
 ```json
 {
-  "nodes": [
-    {"id": "cam-001", "label": "Camera 001", "risk_score": 87}
+  "timestamp": "2026-03-12T09:01:05Z",
+  "source_device": "cam-001",
+  "propagation_risk": 0.81,
+  "neighbors": ["router-02", "nvr-01", "sensor-07"],
+  "next_target_prediction": [
+    {"device_id": "router-02", "score": 0.88, "why": "high betweenness centrality"}
   ],
-  "edges": [
-    {"id": "e1", "source": "cam-001", "target": "router-02", "weight": 0.72}
-  ],
-  "replay": {
-    "frame_count": 120,
-    "start": "2026-03-12T09:00:00Z",
-    "end": "2026-03-12T09:20:00Z"
+  "attack_paths": [["cam-001", "router-02", "access-ctrl-01"]],
+  "mitre": {
+    "tactic": "Lateral Movement",
+    "technique": "T1021"
   }
 }
 ```
@@ -113,12 +118,30 @@ Generates structured incident output from alert evidence.
 
 ```json
 {
+  "event_type": "alert.created",
   "event_id": "evt_4f20",
-  "format": "pdf"
+  "timestamp": "2026-03-12T09:10:07Z",
+  "severity": "high",
+  "device_id": "cam-001",
+  "device_type": "camera",
+  "risk_score": 87,
+  "confidence": "high",
+  "reasons": [
+    "Outbound traffic is 6.8x above rolling baseline",
+    "Likely propagation path detected"
+  ],
+  "mitre": {
+    "tactic": "Lateral Movement",
+    "technique": "T1021"
+  },
+  "graph": {
+    "path": ["cam-001", "router-02", "access-ctrl-01"],
+    "next_targets": ["router-02", "nvr-01"]
+  }
 }
 ```
 
-### Response (JSON mode)
+### Response
 
 ```json
 {
@@ -133,8 +156,9 @@ Generates structured incident output from alert evidence.
 }
 ```
 
-### Response (PDF mode)
+### PDF Download
 
+- `GET /report/{event_id}/pdf`
 - `200 OK`
 - `Content-Type: application/pdf`
 - Body is binary PDF stream.

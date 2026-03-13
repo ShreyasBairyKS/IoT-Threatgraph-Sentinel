@@ -135,9 +135,31 @@ wscat -c ws://localhost:8000/ws/alerts
 Generate report:
 
 ```bash
+# /report expects a full AlertEvent payload.
+# Quick smoke path: fetch one alert, then post it to /report.
+curl http://localhost:8000/alerts
+
 curl -X POST http://localhost:8000/report \
   -H "Content-Type: application/json" \
-  -d '{"event_id":"evt_4f20","format":"json"}'
+  -d '{
+    "event_type":"alert.created",
+    "event_id":"evt_4f20",
+    "timestamp":"2026-03-13T06:00:00Z",
+    "severity":"high",
+    "device_id":"cam-001",
+    "device_type":"camera",
+    "risk_score":87,
+    "confidence":"high",
+    "reasons":["Outbound traffic is 6.8x above rolling baseline"],
+    "mitre":{"tactic":"Lateral Movement","technique":"T1021"},
+    "graph":{"path":["cam-001","router-02"],"next_targets":["router-02"]}
+  }'
+```
+
+Download report PDF for a stored alert:
+
+```bash
+curl -L http://localhost:8000/report/evt_4f20/pdf --output report_evt_4f20.pdf
 ```
 
 ---
