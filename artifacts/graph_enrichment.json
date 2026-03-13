@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-03-13T10:22:37Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "cam-001",
     "propagation_risk": 0.0,
     "neighbors": [],
@@ -12,7 +12,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:22:37Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "sensor-07",
     "propagation_risk": 0.0,
     "neighbors": [],
@@ -24,7 +24,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:22:37Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "router-02",
     "propagation_risk": 0.0,
     "neighbors": [],
@@ -36,7 +36,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:22:37Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "nvr-01",
     "propagation_risk": 0.0,
     "neighbors": [],
@@ -48,7 +48,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:22:37Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "access-ctrl-01",
     "propagation_risk": 0.0,
     "neighbors": [],
@@ -60,7 +60,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:22:37Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "src_ip",
     "propagation_risk": 0.0,
     "neighbors": [],

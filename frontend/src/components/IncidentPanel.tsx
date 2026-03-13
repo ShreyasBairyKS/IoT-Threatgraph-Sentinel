@@ -1,17 +1,35 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { X, Shield, Target, ArrowRight } from 'lucide-react';
+import { X, Shield, Target, ArrowRight, FileText, Download } from 'lucide-react';
 import type { Device, AlertEvent, IncidentReport } from '../types/contracts';
-import { MOCK_RISK_TREND, MOCK_INCIDENT_REPORT } from '../mocks/mockData';
+import { MOCK_RISK_TREND } from '../mocks/mockData';
+
+const API_BASE = 'http://localhost:8000';
 
 interface IncidentPanelProps {
   device: Device | null;
-  latestAlert: AlertEvent | null;
+  selectedAlert: AlertEvent | null;
+  liveAlert: AlertEvent | null;
   onClose: () => void;
 }
 
-export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelProps) {
-  const report: IncidentReport = MOCK_INCIDENT_REPORT;
+export function IncidentPanel({ device, selectedAlert, liveAlert, onClose }: IncidentPanelProps) {
+  const [report, setReport] = useState<IncidentReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+
+  // Fetch report for the pinned alert snapshot, not the moving live stream.
+  useEffect(() => {
+    if (!selectedAlert) { setReport(null); return; }
+    setReportLoading(true);
+    fetch(`${API_BASE}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(selectedAlert),
+    })
+      .then((r) => r.json())
+      .then((data: IncidentReport) => { setReport(data); setReportLoading(false); })
+      .catch(() => setReportLoading(false));
+  }, [selectedAlert?.event_id]);
 
   if (!device) {
     return (
@@ -93,55 +111,108 @@ export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelPro
           </ResponsiveContainer>
         </div>
 
-        {/* Latest alert explanations */}
-        {latestAlert && (
+        {/* Pinned alert snapshot */}
+        {selectedAlert && (
           <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid var(--border)' }}>
-            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>Latest Alert Explanations</div>
-            {latestAlert.reasons.map((r, i) => (
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>
+              Pinned Alert Snapshot
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Event {selectedAlert.event_id} · {new Date(selectedAlert.timestamp).toLocaleString()}
+            </div>
+            {selectedAlert.reasons.map((r, i) => (
               <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', gap: 6 }}>
                 <span style={{ color: 'var(--risk-high)' }}>›</span> {r}
               </div>
             ))}
             <div style={{ marginTop: 8 }}>
               <span className="mitre-chip">
-                {latestAlert.mitre.tactic} · {latestAlert.mitre.technique}
+                {selectedAlert.mitre.tactic} · {selectedAlert.mitre.technique}
               </span>
             </div>
           </div>
         )}
 
+        {/* Live stream context */}
+        {liveAlert && (
+          <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid rgba(34,197,94,0.25)' }}>
+            <div style={{ fontSize: 11, color: 'var(--risk-low)', marginBottom: 8 }}>
+              Live Stream Right Now
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 11 }}>
+              <span style={{ color: 'var(--text-primary)' }}>{liveAlert.device_id}</span>
+              <span className={`badge badge-${liveAlert.severity === 'critical' ? 'critical' : liveAlert.severity === 'high' ? 'high' : liveAlert.severity === 'medium' ? 'medium' : 'low'}`}>
+                {liveAlert.severity}
+              </span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+              {liveAlert.reasons[0] ?? 'No explanation available'}
+            </div>
+          </div>
+        )}
+
         {/* Attack path */}
-        {latestAlert && (
+        {selectedAlert && (
           <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid rgba(239,68,68,0.25)' }}>
             <div style={{ fontSize: 11, color: 'var(--risk-critical)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
               <Target size={12} /> Attack Path
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-              {latestAlert.graph.path.map((node, i) => (
+              {selectedAlert.graph.path.map((node, i) => (
                 <React.Fragment key={node}>
                   <span style={{ fontSize: 11, color: 'var(--text-primary)', background: 'var(--bg-overlay)', borderRadius: 4, padding: '2px 6px' }} className="mono">
                     {node}
                   </span>
-                  {i < latestAlert.graph.path.length - 1 && <ArrowRight size={10} style={{ color: 'var(--risk-critical)' }} />}
+                  {i < selectedAlert.graph.path.length - 1 && <ArrowRight size={10} style={{ color: 'var(--risk-critical)' }} />}
                 </React.Fragment>
               ))}
             </div>
-            {latestAlert.graph.next_targets.length > 0 && (
+            {selectedAlert.graph.next_targets.length > 0 && (
               <div style={{ marginTop: 8, fontSize: 11, color: 'var(--text-secondary)' }}>
-                Next targets: <strong style={{ color: 'var(--risk-high)' }}>{latestAlert.graph.next_targets.join(', ')}</strong>
+                Next targets: <strong style={{ color: 'var(--risk-high)' }}>{selectedAlert.graph.next_targets.join(', ')}</strong>
               </div>
             )}
           </div>
         )}
 
-        {/* Recommendations */}
+        {/* Recommendations + PDF download */}
         <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid var(--border)' }}>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>Recommendations</div>
-          {report.recommendations.map((rec, i) => (
-            <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', gap: 6 }}>
-              <span style={{ color: 'var(--brand-from)' }}>{i + 1}.</span> {rec}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
+              <FileText size={11} /> Recommendations
+            </div>
+            {selectedAlert && (
+              <a
+                href={`${API_BASE}/report/${selectedAlert.event_id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  fontSize: 11, color: 'var(--brand-from)', textDecoration: 'none',
+                  background: 'rgba(99,102,241,0.12)', borderRadius: 4, padding: '2px 8px',
+                }}
+              >
+                <Download size={10} /> PDF
+              </a>
+            )}
+          </div>
+
+          {reportLoading && (
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Generating report…</div>
+          )}
+
+          {!reportLoading && report && report.recommendations.map((rec, i) => (
+            <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', marginBottom: 6, display: 'flex', gap: 6 }}>
+              <span style={{ color: 'var(--brand-from)', flexShrink: 0 }}>{i + 1}.</span> {rec}
             </div>
           ))}
+
+          {!reportLoading && report && (
+            <div style={{ marginTop: 8, fontSize: 10, color: 'var(--text-muted)' }}>
+              Report ID: <span className="mono">{report.report_id}</span>
+              {' · '}{report.affected_devices.length} device(s) affected
+            </div>
+          )}
         </div>
       </div>
     </div>

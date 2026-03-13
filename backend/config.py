@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # WebSocket broadcaster interval (seconds) in mock mode
     WS_MOCK_INTERVAL_SECONDS: float = 3.0
 
+    # Real-time synthetic stream interval (seconds)
+    REALTIME_STREAM_INTERVAL_SECONDS: float = 5.0
+
+    # Enable continuous real-time feeder for local development/demo
+    REALTIME_STREAM_ENABLED: bool = True
+
     # Polling fallback interval for clients that cannot use WebSocket
     POLL_FALLBACK_INTERVAL_SECONDS: int = 3
 

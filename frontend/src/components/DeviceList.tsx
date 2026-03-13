@@ -92,7 +92,12 @@ interface DeviceListProps {
 }
 
 export function DeviceList({ devices, selectedId, onSelect }: DeviceListProps) {
-  const sorted = [...devices].sort((a, b) => b.risk_score - a.risk_score);
+  const alertingDevices = [...devices]
+    .filter((device) => device.risk_score >= 60)
+    .sort((a, b) => b.risk_score - a.risk_score);
+  const quietDevices = [...devices]
+    .filter((device) => device.risk_score < 60)
+    .sort((a, b) => a.risk_score - b.risk_score);
 
   return (
     <div className="panel">
@@ -104,7 +109,27 @@ export function DeviceList({ devices, selectedId, onSelect }: DeviceListProps) {
         </span>
       </div>
       <div className="panel-body">
-        {sorted.map((d) => (
+        <div style={{ fontSize: 11, color: 'var(--risk-high)', fontWeight: 600, marginBottom: 6 }}>
+          Active Alerts ({alertingDevices.length})
+        </div>
+        {alertingDevices.map((d) => (
+          <DeviceRow
+            key={d.device_id}
+            device={d}
+            selected={selectedId === d.device_id}
+            onClick={() => onSelect(d)}
+          />
+        ))}
+
+        <div style={{ fontSize: 11, color: 'var(--risk-normal)', fontWeight: 600, marginTop: 10, marginBottom: 6 }}>
+          No Active Alerts ({quietDevices.length})
+        </div>
+        {quietDevices.length === 0 && (
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+            All monitored devices are currently participating in an active incident path.
+          </div>
+        )}
+        {quietDevices.map((d) => (
           <DeviceRow
             key={d.device_id}
             device={d}

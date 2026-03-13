@@ -26,8 +26,10 @@ from backend.store import (
     alert_store,
     device_registry,
     graph_store,
+    alert_context_store,
     build_alert_event,
     ALERT_RISK_THRESHOLD,
+    processing_stats,
 )
 from backend.ws.broadcaster import manager
 
@@ -77,6 +79,7 @@ async def _process_anomaly(result: AnomalyResult) -> None:
 
     # 2. Only create an alert if above threshold
     if result.scores.final_risk < ALERT_RISK_THRESHOLD:
+        await processing_stats.record(generated_alert=False)
         logger.info("Risk %.1f below threshold %.1f — no alert.", result.scores.final_risk, ALERT_RISK_THRESHOLD)
         return
 
@@ -86,6 +89,9 @@ async def _process_anomaly(result: AnomalyResult) -> None:
 
     # 4. Store + broadcast
     await alert_store.add(alert)
+    await processing_stats.record(generated_alert=True)
+    devices_snapshot = await device_registry.get_all()
+    await alert_context_store.save(alert.event_id, devices_snapshot, graph)
     await manager.broadcast(alert.model_dump(mode="json"))
     logger.info("Alert broadcast: %s  severity=%s", alert.event_id, alert.severity)
 

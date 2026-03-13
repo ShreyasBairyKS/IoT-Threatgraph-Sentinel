@@ -69,8 +69,14 @@ async def ws_alert_endpoint(websocket: WebSocket) -> None:
     """
     await manager.connect(websocket)
     try:
-        # Send the most recent alert immediately upon connection
-        if MOCK_ALERTS:
+        # Send the most recent live alert immediately upon connection.
+        # Fallback to mock alert only when no live alert exists yet.
+        from backend.store import alert_store
+
+        live_alerts = await alert_store.get_all()
+        if live_alerts:
+            await manager.send_personal(websocket, live_alerts[0].model_dump(mode="json"))
+        elif MOCK_ALERTS:
             latest = MOCK_ALERTS[0].model_dump(mode="json")
             await manager.send_personal(websocket, latest)
 

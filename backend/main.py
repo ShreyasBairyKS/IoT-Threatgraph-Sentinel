@@ -27,7 +27,8 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.config import settings
-from backend.routers import devices, alerts, graph, report
+from backend.live_stream import realtime_stream_loop
+from backend.routers import devices, alerts, graph, report, metrics
 from backend.routers import ingest
 from backend.ws.broadcaster import manager, ws_alert_endpoint, mock_broadcast_loop
 
@@ -41,12 +42,16 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Start the mock WS broadcaster on server startup."""
-    logger.info("Starting mock WebSocket broadcaster...")
-    broadcast_task = asyncio.create_task(mock_broadcast_loop())
+    """Start background stream task on server startup."""
+    if settings.REALTIME_STREAM_ENABLED:
+        logger.info("Starting real-time stream feeder...")
+        broadcast_task = asyncio.create_task(realtime_stream_loop())
+    else:
+        logger.info("Starting mock WebSocket broadcaster...")
+        broadcast_task = asyncio.create_task(mock_broadcast_loop())
     yield
     broadcast_task.cancel()
-    logger.info("Mock broadcaster stopped.")
+    logger.info("Background broadcaster stopped.")
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +87,7 @@ app.include_router(devices.router)
 app.include_router(alerts.router)
 app.include_router(graph.router)
 app.include_router(report.router)
+app.include_router(metrics.router)
 app.include_router(ingest.router)
 
 
@@ -93,6 +99,16 @@ app.include_router(ingest.router)
 async def health() -> dict[str, str]:
     """Liveness probe. Returns status and app version."""
     return {"status": "ok", "version": settings.APP_VERSION}
+
+
+@app.get("/", tags=["health"])
+async def root() -> dict[str, str]:
+    """Root endpoint with quick links to API docs and health check."""
+    return {
+        "message": "IoT ThreatGraph Sentinel API is running",
+        "health": "/health",
+        "docs": "/docs",
+    }
 
 
 # ---------------------------------------------------------------------------
