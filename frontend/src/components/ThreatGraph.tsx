@@ -23,10 +23,15 @@ function buildElements(
   focusMode: boolean,
   highlightedDeviceId?: string | null,
 ): ElementDefinition[] {
+  const attackPaths = enrichment.attack_paths.length > 0
+    ? enrichment.attack_paths
+    : [[enrichment.source_device]];
+  const attackPathNodes = new Set(attackPaths.flat());
+
   const relatedIds = new Set<string>([
     enrichment.source_device,
     ...enrichment.neighbors,
-    ...enrichment.attack_paths.flat(),
+    ...attackPathNodes,
     ...enrichment.next_target_prediction.map((item) => item.device_id),
   ]);
 
@@ -37,7 +42,6 @@ function buildElements(
   const nodeIds = new Set(sourceDevices.map((device) => device.device_id));
   relatedIds.forEach((id) => nodeIds.add(id));
 
-  const attackPath = enrichment.attack_paths[0] ?? [];
   const nodes: ElementDefinition[] = Array.from(nodeIds).map((id) => {
     const device = devices.find((item) => item.device_id === id);
     const risk = device?.risk_score ?? 18;
@@ -48,10 +52,10 @@ function buildElements(
         fullLabel: id,
         risk,
         color: nodeColor(risk),
-        inPath: attackPath.includes(id),
+        inPath: attackPathNodes.has(id),
         isSource: enrichment.source_device === id,
         isHighlighted: highlightedDeviceId === id,
-        size: Math.max(28, Math.min(54, 24 + risk / 3)),
+        size: Math.max(34, Math.min(60, 28 + risk / 3)),
       },
     };
   });
@@ -61,23 +65,26 @@ function buildElements(
       id: `edge-${enrichment.source_device}-${neighbor}-${index}`,
       source: enrichment.source_device,
       target: neighbor,
-      suspicious: attackPath.includes(neighbor) || enrichment.source_device === attackPath[0],
+      suspicious: attackPathNodes.has(neighbor) || attackPathNodes.has(enrichment.source_device),
     },
   }));
 
-  for (let index = 0; index < attackPath.length - 1; index += 1) {
-    const source = attackPath[index];
-    const target = attackPath[index + 1];
-    const edgeId = `attack-${source}-${target}`;
-    if (!edges.some((edge) => edge.data?.id === edgeId)) {
-      edges.push({
-        data: {
-          id: edgeId,
-          source,
-          target,
-          suspicious: true,
-        },
-      });
+  for (let index = 0; index < attackPaths.length; index += 1) {
+    const path = attackPaths[index] ?? [];
+    for (let step = 0; step < path.length - 1; step += 1) {
+      const source = path[step];
+      const target = path[step + 1];
+      const edgeId = `attack-${source}-${target}`;
+      if (!edges.some((edge) => edge.data?.id === edgeId)) {
+        edges.push({
+          data: {
+            id: edgeId,
+            source,
+            target,
+            suspicious: true,
+          },
+        });
+      }
     }
   }
 
@@ -93,14 +100,14 @@ const GRAPH_STYLE: StylesheetJson = [
       width: 'data(size)',
       height: 'data(size)',
       color: '#f8fafc',
-      'font-size': 9,
+      'font-size': 12,
       'font-weight': 700,
       'text-wrap': 'wrap',
-      'text-max-width': '70px',
+      'text-max-width': '110px',
       'text-valign': 'center',
       'text-halign': 'center',
-      'min-zoomed-font-size': 7,
-      'border-width': 2,
+      'min-zoomed-font-size': 9,
+      'border-width': 3,
       'border-color': 'rgba(9, 9, 11, 0.95)',
       'overlay-opacity': 0,
        // Removed unsupported shadow style properties
@@ -135,19 +142,19 @@ const GRAPH_STYLE: StylesheetJson = [
   {
     selector: 'edge',
     style: {
-      width: 2,
+      width: 3,
       'curve-style': 'bezier',
-      'line-color': 'rgba(99, 102, 241, 0.35)',
-      'target-arrow-color': 'rgba(99, 102, 241, 0.45)',
+      'line-color': 'rgba(99, 102, 241, 0.6)',
+      'target-arrow-color': 'rgba(99, 102, 241, 0.8)',
       'target-arrow-shape': 'triangle',
-      opacity: 0.72,
-      'arrow-scale': 0.8,
+      opacity: 0.9,
+      'arrow-scale': 1,
     },
   },
   {
     selector: 'edge[?suspicious]',
     style: {
-      width: 3,
+      width: 4,
       'line-color': '#fb7185',
       'target-arrow-color': '#fb7185',
       'line-style': 'dashed',
@@ -186,6 +193,15 @@ export function ThreatGraph({
   const cyRef = useRef<Core | null>(null);
 
   const attackPath = enrichment.attack_paths[0] ?? [];
+  const totalImpactedDevices = new Set([
+    enrichment.source_device,
+    ...enrichment.neighbors,
+    ...enrichment.attack_paths.flat(),
+  ]).size;
+  const pathPreview = enrichment.attack_paths
+    .slice(0, 2)
+    .map((path) => path.map(shortenLabel).join(' → '))
+    .join('  |  ');
   const focusMode = mode === 'focus';
 
   const layout = useMemo<LayoutOptions>(() => (
@@ -254,11 +270,11 @@ export function ThreatGraph({
         <GitBranch size={14} className="icon" />
         {title}
         {subtitle && (
-          <span style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400 }}>
+          <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
             {subtitle}
           </span>
         )}
-        <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 500 }}>
+        <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>
           propagation risk{' '}
           <strong style={{ color: propagationPct >= 70 ? 'var(--risk-high)' : 'var(--risk-medium)' }}>
             {propagationPct}%
@@ -275,25 +291,28 @@ export function ThreatGraph({
         <div style={{ position: 'absolute', top: 12, left: 12, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button
             onClick={() => cyRef.current?.fit(undefined, 30)}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(9,9,11,0.82)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 999, padding: '4px 9px', fontSize: 11, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(9,9,11,0.9)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 999, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
           >
-            <LocateFixed size={11} /> Fit
+            <LocateFixed size={13} /> Fit
           </button>
           <button
             onClick={() => cyRef.current?.layout(layout).run()}
-            style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(9,9,11,0.82)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 999, padding: '4px 9px', fontSize: 11, cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(9,9,11,0.9)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 999, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
           >
-            <ScanSearch size={11} /> Re-layout
+            <ScanSearch size={13} /> Re-layout
           </button>
         </div>
 
         {attackPath.length > 0 && (
-          <div style={{ position: 'absolute', top: 12, right: 12, maxWidth: '55%', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 12, padding: '6px 10px', fontSize: 11, color: '#fca5a5', backdropFilter: 'blur(10px)' }}>
-            Attack path: {attackPath.map(shortenLabel).join(' → ')}
+          <div style={{ position: 'absolute', top: 12, right: 12, maxWidth: '62%', background: 'rgba(239,68,68,0.16)', border: '1px solid rgba(239,68,68,0.45)', borderRadius: 12, padding: '10px 12px', fontSize: 13, color: '#fecaca', backdropFilter: 'blur(10px)' }}>
+            <div style={{ fontWeight: 700, marginBottom: 6 }}>Attack in progress</div>
+            <div style={{ marginBottom: 4 }}>Source: <strong>{shortenLabel(enrichment.source_device)}</strong></div>
+            <div style={{ marginBottom: 4 }}>Impacted devices: <strong>{totalImpactedDevices}</strong> · Paths: <strong>{enrichment.attack_paths.length}</strong></div>
+            <div>Path(s): {pathPreview}</div>
           </div>
         )}
 
-        <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(9,9,11,0.82)', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 10px', fontSize: 11, display: 'grid', gap: 4, color: 'var(--text-secondary)' }}>
+        <div style={{ position: 'absolute', bottom: 12, left: 12, background: 'rgba(9,9,11,0.92)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 12px', fontSize: 13, display: 'grid', gap: 6, color: 'var(--text-primary)' }}>
           {[
             { color: '#ef4444', label: 'Critical ≥80' },
             { color: '#f97316', label: 'High ≥60' },
@@ -302,7 +321,7 @@ export function ThreatGraph({
             { color: '#3b82f6', label: 'Normal' },
           ].map((item) => (
             <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, display: 'inline-block' }} />
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: item.color, display: 'inline-block' }} />
               {item.label}
             </div>
           ))}

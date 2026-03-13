@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -37,10 +38,54 @@ from ml.train import load_artifact
 class ModelBundle:
     scaler: Any
     isolation_forest: Any
+    isolation_forest_meta: dict[str, float] | None
     device_classifier: Any          # None if not available
     device_classes: list[str]       # label list matching classifier output
     autoencoder: Any | None         # Optional day-3 drift detector
     autoencoder_meta: dict[str, float] | None
+
+
+@dataclass(frozen=True)
+class InferenceConfig:
+    confidence_medium_threshold: float = 50.0
+    confidence_high_threshold: float = 80.0
+    explanation_risk_threshold: float = 70.0
+    iforest_sigmoid_scale: float = 1.0
+    iforest_default_center: float = 0.0
+    autoencoder_z_gain: float = 20.0
+    fusion_iforest_weight: float = 0.7
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def load_inference_config() -> InferenceConfig:
+    cfg = InferenceConfig(
+        confidence_medium_threshold=_env_float("ML_CONFIDENCE_MEDIUM_THRESHOLD", 50.0),
+        confidence_high_threshold=_env_float("ML_CONFIDENCE_HIGH_THRESHOLD", 80.0),
+        explanation_risk_threshold=_env_float("ML_EXPLANATION_RISK_THRESHOLD", 70.0),
+        iforest_sigmoid_scale=max(1e-6, _env_float("ML_IFOREST_SIGMOID_SCALE", 1.0)),
+        iforest_default_center=_env_float("ML_IFOREST_DEFAULT_CENTER", 0.0),
+        autoencoder_z_gain=_env_float("ML_AUTOENCODER_Z_GAIN", 20.0),
+        fusion_iforest_weight=_env_float("ML_FUSION_IFOREST_WEIGHT", 0.7),
+    )
+    w = min(1.0, max(0.0, cfg.fusion_iforest_weight))
+    return InferenceConfig(
+        confidence_medium_threshold=cfg.confidence_medium_threshold,
+        confidence_high_threshold=max(cfg.confidence_medium_threshold, cfg.confidence_high_threshold),
+        explanation_risk_threshold=cfg.explanation_risk_threshold,
+        iforest_sigmoid_scale=max(1e-6, cfg.iforest_sigmoid_scale),
+        iforest_default_center=cfg.iforest_default_center,
+        autoencoder_z_gain=cfg.autoencoder_z_gain,
+        fusion_iforest_weight=w,
+    )
 
 
 def load_models(model_dir: str | Path = "artifacts/models") -> ModelBundle:
@@ -48,6 +93,7 @@ def load_models(model_dir: str | Path = "artifacts/models") -> ModelBundle:
     d = Path(model_dir)
     scaler = load_artifact(d / "scaler.pkl")
     iforest = load_artifact(d / "isolation_forest.pkl")
+    iforest_meta = load_artifact(d / "isolation_forest_meta.pkl") if (d / "isolation_forest_meta.pkl").exists() else None
     dt_clf = load_artifact(d / "device_classifier.pkl") if (d / "device_classifier.pkl").exists() else None
     dt_classes = load_artifact(d / "device_classes.pkl") if (d / "device_classes.pkl").exists() else []
     autoencoder = load_artifact(d / "autoencoder.pkl") if (d / "autoencoder.pkl").exists() else None
@@ -57,6 +103,7 @@ def load_models(model_dir: str | Path = "artifacts/models") -> ModelBundle:
     return ModelBundle(
         scaler=scaler,
         isolation_forest=iforest,
+        isolation_forest_meta=iforest_meta,
         device_classifier=dt_clf,
         device_classes=list(dt_classes),
         autoencoder=autoencoder,
@@ -72,20 +119,20 @@ def _feature_vector(features: dict[str, float]) -> np.ndarray:
     return np.array([[float(features.get(k, 0.0)) for k in FEATURE_KEYS]], dtype=np.float64)
 
 
-def _if_score(models: ModelBundle, X_scaled: np.ndarray) -> float:
+def _if_score(models: ModelBundle, X_scaled: np.ndarray, cfg: InferenceConfig) -> float:
     """Return Isolation Forest anomaly score in [0, 100]."""
     raw = models.isolation_forest.decision_function(X_scaled)[0]
-    # decision_function: negative = anomalous, positive = normal
-    # We need a global min/max to normalise; use training score range stored
-    # via the model's offset_ and threshold_ attributes as a proxy.
-    # Simpler: apply a sigmoid-like mapping that keeps scores comparable.
-    inverted = -float(raw)
-    # Scale relative to a typical boundary (0 = normal threshold)
-    score = 50.0 + inverted * 35.0   # linear stretch around 50
+    raw_f = float(raw)
+    meta = models.isolation_forest_meta or {}
+    threshold_center = float(meta.get("threshold_offset", cfg.iforest_default_center))
+    std = float(meta.get("decision_std", 1.0))
+    scale = max(1e-6, std * cfg.iforest_sigmoid_scale)
+    anomaly_delta = (threshold_center - raw_f) / scale
+    score = 100.0 / (1.0 + np.exp(-anomaly_delta))
     return float(np.clip(score, 0.0, 100.0))
 
 
-def _autoencoder_score(models: ModelBundle, X_scaled: np.ndarray) -> float | None:
+def _autoencoder_score(models: ModelBundle, X_scaled: np.ndarray, cfg: InferenceConfig) -> float | None:
     """Return optional drift score in [0, 100] from reconstruction error."""
     if models.autoencoder is None:
         return None
@@ -97,8 +144,7 @@ def _autoencoder_score(models: ModelBundle, X_scaled: np.ndarray) -> float | Non
     mean = float(meta.get("error_mean", 0.0))
     std = float(meta.get("error_std", 1.0)) or 1.0
     z = (err - mean) / std
-    # Keep mapping simple and deterministic around a 50 baseline.
-    score = 50.0 + z * 20.0
+    score = 50.0 + z * cfg.autoencoder_z_gain
     return float(np.clip(score, 0.0, 100.0))
 
 
@@ -112,10 +158,11 @@ def _predict_device_type(models: ModelBundle, X_scaled: np.ndarray, fallback: st
     return fallback
 
 
-def _confidence(risk: float) -> Confidence:
-    if risk >= 80:
+def _confidence(risk: float, cfg: InferenceConfig | None = None) -> Confidence:
+    c = cfg or load_inference_config()
+    if risk >= c.confidence_high_threshold:
         return "high"
-    if risk >= 50:
+    if risk >= c.confidence_medium_threshold:
         return "medium"
     return "low"
 
@@ -125,9 +172,11 @@ def _reason_codes_and_explanations(
     x_scaled: np.ndarray,
     features: dict[str, float],
     risk: float,
+    cfg: InferenceConfig | None = None,
 ) -> tuple[list[str], list[str]]:
     """Generate reason codes and SHAP-like human-readable explanation strings."""
-    if risk < 70:
+    c = cfg or load_inference_config()
+    if risk < c.explanation_risk_threshold:
         return [], []
 
     codes: list[str] = []
@@ -220,20 +269,22 @@ def infer_window(
     The output shape is identical — contract-compatible with P2/P3.
     """
     ts = timestamp or _iso_utc_now()
+    cfg = load_inference_config()
     X_raw = _feature_vector(features)
     X_scaled = models.scaler.transform(X_raw)
 
-    if_score = _if_score(models, X_scaled)
-    ae_score = _autoencoder_score(models, X_scaled)
+    if_score = _if_score(models, X_scaled, cfg)
+    ae_score = _autoencoder_score(models, X_scaled, cfg)
     predicted_type = _predict_device_type(models, X_scaled, fallback=device_type)
 
     if ae_score is None:
         final_risk = float(np.clip(if_score, 0.0, 100.0))
     else:
-        final_risk = float(np.clip(0.7 * if_score + 0.3 * ae_score, 0.0, 100.0))
+        ae_weight = 1.0 - cfg.fusion_iforest_weight
+        final_risk = float(np.clip(cfg.fusion_iforest_weight * if_score + ae_weight * ae_score, 0.0, 100.0))
 
-    conf = _confidence(final_risk)
-    codes, exps = _reason_codes_and_explanations(models, X_scaled, features, final_risk)
+    conf = _confidence(final_risk, cfg)
+    codes, exps = _reason_codes_and_explanations(models, X_scaled, features, final_risk, cfg)
 
     return ScoreResult(
         timestamp=ts,

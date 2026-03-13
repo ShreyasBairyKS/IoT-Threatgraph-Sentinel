@@ -89,26 +89,49 @@ interface DeviceListProps {
   devices: Device[];
   selectedId: string | null;
   onSelect: (device: Device) => void;
+  affectedOnly?: boolean;
 }
 
-export function DeviceList({ devices, selectedId, onSelect }: DeviceListProps) {
+export function DeviceList({ devices, selectedId, onSelect, affectedOnly = false }: DeviceListProps) {
   const alertingDevices = [...devices]
     .filter((device) => device.risk_score >= 60)
     .sort((a, b) => b.risk_score - a.risk_score);
   const quietDevices = [...devices]
     .filter((device) => device.risk_score < 60)
     .sort((a, b) => a.risk_score - b.risk_score);
+  const affectedDevices = [...devices].sort((a, b) => b.risk_score - a.risk_score);
 
   return (
     <div className="panel">
       <div className="card-header">
         <Monitor size={14} className="icon" />
-        Devices
+        {affectedOnly ? 'Affected Devices' : 'Devices'}
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400 }}>
-          {devices.length} online
+          {affectedOnly ? `${devices.length} impacted` : `${devices.length} online`}
         </span>
       </div>
       <div className="panel-body">
+        {affectedOnly ? (
+          <>
+            <div style={{ fontSize: 11, color: 'var(--risk-high)', fontWeight: 600, marginBottom: 6 }}>
+              Devices in current alert spread ({affectedDevices.length})
+            </div>
+            {affectedDevices.length === 0 && (
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                No affected devices available for the current alert context.
+              </div>
+            )}
+            {affectedDevices.map((d) => (
+              <DeviceRow
+                key={d.device_id}
+                device={d}
+                selected={selectedId === d.device_id}
+                onClick={() => onSelect(d)}
+              />
+            ))}
+          </>
+        ) : (
+          <>
         <div style={{ fontSize: 11, color: 'var(--risk-high)', fontWeight: 600, marginBottom: 6 }}>
           Active Alerts ({alertingDevices.length})
         </div>
@@ -137,6 +160,8 @@ export function DeviceList({ devices, selectedId, onSelect }: DeviceListProps) {
             onClick={() => onSelect(d)}
           />
         ))}
+          </>
+        )}
       </div>
     </div>
   );

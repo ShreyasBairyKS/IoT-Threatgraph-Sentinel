@@ -5,15 +5,18 @@ import { DeviceList } from './components/DeviceList';
 import { ThreatGraph } from './components/ThreatGraph';
 import { AlertFeed } from './components/AlertFeed';
 import { IncidentPanel } from './components/IncidentPanel';
+import { IncidentAnalysisModal } from './components/IncidentAnalysisModal';
+import { IncidentDetailPage } from './components/IncidentDetailPage';
 import { ReplayTimeline } from './components/ReplayTimeline';
 import { buildReplayFrames } from './components/replayUtils';
 
-import { MOCK_GRAPH_ENRICHMENT } from './mocks/mockData';
 import type { AlertEvent, Device, GraphEnrichment } from './types/contracts';
 import { Activity, Wifi } from 'lucide-react';
 
-const API_BASE = 'http://localhost:8000';
-const WS_URL = 'ws://localhost:8000/ws/alerts';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?? `${window.location.protocol}//${window.location.hostname}:8000`;
+const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined)
+  ?? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/ws/alerts`;
 
 interface AlertGraphSnapshot {
   devices: Device[];
@@ -39,6 +42,31 @@ function buildSnapshot(alert: AlertEvent, sourceDevices: Device[], why: string):
   };
 }
 
+function buildLiveEnrichmentFromDevices(devices: Device[]): GraphEnrichment | null {
+  if (devices.length === 0) return null;
+  const sorted = [...devices].sort((a, b) => b.risk_score - a.risk_score);
+  const source = sorted[0];
+  const neighbors = sorted.slice(1, 4).map((d) => d.device_id);
+  return {
+    timestamp: new Date().toISOString(),
+    source_device: source.device_id,
+    propagation_risk: Math.max(0, Math.min(1, source.risk_score / 100)),
+    neighbors,
+    next_target_prediction: neighbors.map((id, index) => ({
+      device_id: id,
+      score: Number((0.8 - index * 0.1).toFixed(2)),
+      why: 'backend device risk ordering',
+    })),
+    attack_paths: neighbors.length > 0 ? [
+      [source.device_id, neighbors[0]],
+    ] : [[source.device_id]],
+    mitre: {
+      tactic: 'Unknown',
+      technique: 'T0000',
+    },
+  };
+}
+
 // ── App ────────────────────────────────────────────────────────────────────
 export default function App() {
   // State
@@ -48,13 +76,10 @@ export default function App() {
   const [liveAlert, setLiveAlert] = useState<AlertEvent | null>(null);
   const [selectedAlert, setSelectedAlert] = useState<AlertEvent | null>(null);
   const [replayIndex, setReplayIndex] = useState(0);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'dashboard' | 'incident'>('dashboard');
   const [wsStatus, setWsStatus] = useState<'live' | 'connecting' | 'disconnected'>('connecting');
   const [alertSnapshots, setAlertSnapshots] = useState<Record<string, AlertGraphSnapshot>>({});
-  const [summary, setSummary] = useState({
-    total_submissions: 0,
-    alert_submissions: 0,
-    non_alert_submissions: 0,
-  });
 
   // Build replay frames from alerts
   const replayFrames = buildReplayFrames(alerts);
@@ -64,13 +89,6 @@ export default function App() {
 
   // Fetch initial alerts + devices from API
   useEffect(() => {
-    const loadSummary = () => {
-      fetch(`${API_BASE}/metrics/summary`)
-        .then((r) => r.json())
-        .then((data) => setSummary(data))
-        .catch(() => {});
-    };
-
     const loadDevices = () => {
       fetch(`${API_BASE}/devices`)
         .then((r) => r.json())
@@ -78,23 +96,25 @@ export default function App() {
         .catch(() => {});
     };
 
-    fetch(`${API_BASE}/alerts`)
-      .then((r) => r.json())
-      .then((data: AlertEvent[]) => {
-        const recentAlerts = data.slice(0, 50);
-        setAlerts(recentAlerts);
-        if (recentAlerts.length > 0) {
-          setLiveAlert(recentAlerts[0]);
-        }
-      })
-      .catch(() => {});
+    const loadAlerts = () => {
+      fetch(`${API_BASE}/alerts`)
+        .then((r) => r.json())
+        .then((data: AlertEvent[]) => {
+          const recentAlerts = data.slice(0, 100);
+          setAlerts(recentAlerts);
+          if (recentAlerts.length > 0) {
+            setLiveAlert((prev) => prev ?? recentAlerts[0]);
+          }
+        })
+        .catch(() => {});
+    };
 
     loadDevices();
-    loadSummary();
+    loadAlerts();
 
     const pollId = window.setInterval(() => {
       loadDevices();
-      loadSummary();
+      loadAlerts();
     }, 4000);
 
     return () => window.clearInterval(pollId);
@@ -147,10 +167,6 @@ export default function App() {
               }));
             })
             .catch(() => {});
-          fetch(`${API_BASE}/metrics/summary`)
-            .then((r) => r.json())
-            .then((data) => setSummary(data))
-            .catch(() => {});
         } catch (_) {}
       };
     }
@@ -174,6 +190,7 @@ export default function App() {
     const device = devices.find((d) => d.device_id === alert.device_id) ?? null;
     setSelectedDevice(device);
     setSelectedAlert(alert);
+    setViewMode('incident');
 
     fetch(`${API_BASE}/alerts/${alert.event_id}/context`)
       .then((response) => {
@@ -217,22 +234,65 @@ export default function App() {
 
   const liveSnapshot = liveAlert ? alertSnapshots[liveAlert.event_id] : null;
   const selectedSnapshot = selectedAlert ? alertSnapshots[selectedAlert.event_id] : null;
+  const analysisAlert = selectedAlert ?? liveAlert;
+  const analysisSnapshot = selectedAlert
+    ? selectedSnapshot
+    : liveSnapshot;
+  const analysisEnrichment = analysisSnapshot?.enrichment
+    ?? (analysisAlert ? buildEnrichmentFromAlert(analysisAlert, 'analysis') : null);
 
   // Derive graph enrichment from live alert for the threat graph
-  const activeEnrichment: GraphEnrichment = liveSnapshot?.enrichment ?? (liveAlert
-    ? buildEnrichmentFromAlert(liveAlert, 'live feed')
-    : MOCK_GRAPH_ENRICHMENT);
-
-  const liveGraphDevices = liveSnapshot?.devices ?? devices;
+  const activeEnrichment: GraphEnrichment | null = liveSnapshot?.enrichment
+    ?? (liveAlert ? buildEnrichmentFromAlert(liveAlert, 'live feed') : buildLiveEnrichmentFromDevices(devices));
+  const liveGraphSourceDevices = liveSnapshot?.devices ?? devices;
+  const activeAffectedIds = activeEnrichment
+    ? new Set<string>([
+        activeEnrichment.source_device,
+        ...activeEnrichment.neighbors,
+        ...activeEnrichment.attack_paths.flat(),
+        ...activeEnrichment.next_target_prediction.map((item) => item.device_id),
+      ])
+    : null;
+  const liveGraphDevices = activeAffectedIds
+    ? liveGraphSourceDevices.filter((device) => activeAffectedIds.has(device.device_id))
+    : liveGraphSourceDevices;
 
   const selectedEnrichment: GraphEnrichment | null = selectedSnapshot?.enrichment ?? (selectedAlert
     ? buildEnrichmentFromAlert(selectedAlert, 'selected incident')
     : null);
   const selectedGraphDevices = selectedSnapshot?.devices ?? devices;
 
-  const totalSubmittedCount = summary.total_submissions;
-  const alertingCount = summary.alert_submissions;
-  const quietCount = summary.non_alert_submissions;
+  const alertContextEnrichment = selectedEnrichment ?? activeEnrichment;
+  const affectedDeviceIds = alertContextEnrichment
+    ? new Set<string>([
+        alertContextEnrichment.source_device,
+        ...alertContextEnrichment.neighbors,
+        ...alertContextEnrichment.attack_paths.flat(),
+        ...alertContextEnrichment.next_target_prediction.map((item) => item.device_id),
+      ])
+    : null;
+  const visibleDevices = affectedDeviceIds
+    ? devices.filter((device) => affectedDeviceIds.has(device.device_id))
+    : devices;
+
+  const totalSubmittedCount = devices.length;
+  const alertingCount = devices.filter((device) => device.risk_score >= 60).length;
+  const quietCount = Math.max(0, totalSubmittedCount - alertingCount);
+
+  const incidentEnrichment = selectedSnapshot?.enrichment
+    ?? (selectedAlert ? buildEnrichmentFromAlert(selectedAlert, 'incident page') : null);
+
+  if (viewMode === 'incident' && selectedAlert && incidentEnrichment) {
+    return (
+      <IncidentDetailPage
+        alert={selectedAlert}
+        devices={selectedSnapshot?.devices ?? devices}
+        enrichment={incidentEnrichment}
+        onBack={() => setViewMode('dashboard')}
+        onSelectDevice={handleNodeClick}
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -244,6 +304,15 @@ export default function App() {
         </div>
 
         <div className="top-bar-meta">
+          {analysisAlert && (
+            <button
+              className="btn btn-ghost"
+              style={{ fontSize: 12 }}
+              onClick={() => setAnalysisOpen(true)}
+            >
+              Analyze Incident
+            </button>
+          )}
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <Activity size={12} />
             {alerts.length} alerts
@@ -292,9 +361,10 @@ export default function App() {
         <div className="main-content" style={{ flex: 1 }}>
           {/* Left: Device List */}
           <DeviceList
-            devices={devices}
+            devices={visibleDevices}
             selectedId={selectedDevice?.device_id ?? null}
             onSelect={handleDeviceSelect}
+            affectedOnly={Boolean(affectedDeviceIds)}
           />
 
           <div
@@ -305,15 +375,24 @@ export default function App() {
                 : 'minmax(320px, 1fr)',
             }}
           >
-            <ThreatGraph
-              devices={liveGraphDevices}
-              enrichment={activeEnrichment}
-              onNodeClick={handleNodeClick}
-              title="Live Threat Graph"
-              subtitle="always-on real-time topology"
-              mode="live"
-              highlightedDeviceId={liveAlert?.device_id ?? null}
-            />
+            {activeEnrichment ? (
+              <ThreatGraph
+                devices={liveGraphDevices}
+                enrichment={activeEnrichment}
+                onNodeClick={handleNodeClick}
+                title="Live Threat Graph"
+                subtitle="always-on real-time topology"
+                mode="live"
+                highlightedDeviceId={liveAlert?.device_id ?? null}
+              />
+            ) : (
+              <div className="panel" style={{ alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                <div className="card-header" style={{ width: '100%' }}>Live Threat Graph</div>
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  Waiting for backend telemetry…
+                </div>
+              </div>
+            )}
 
             {selectedEnrichment && (
               <ThreatGraph
@@ -347,6 +426,7 @@ export default function App() {
               device={selectedDevice}
               selectedAlert={selectedAlert}
               liveAlert={liveAlert}
+              alerts={alerts}
               onClose={() => {
                 setSelectedDevice(null);
                 setSelectedAlert(null);
@@ -362,6 +442,14 @@ export default function App() {
           onChange={handleReplayChange}
         />
       </div>
+
+      <IncidentAnalysisModal
+        open={analysisOpen}
+        alert={analysisAlert}
+        devices={analysisSnapshot?.devices ?? devices}
+        enrichment={analysisEnrichment}
+        onClose={() => setAnalysisOpen(false)}
+      />
     </div>
   );
 }

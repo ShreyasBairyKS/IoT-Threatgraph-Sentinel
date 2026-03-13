@@ -72,33 +72,66 @@ _WHY_ROTATION: list[str] = [
     "high eigenvector centrality in IoT graph",
 ]
 
+_DEVICE_IMPORTANCE: dict[str, float] = {
+    "router": 1.0,
+    "nvr": 0.95,
+    "access_controller": 0.9,
+    "camera": 0.75,
+    "thermostat": 0.45,
+    "sensor": 0.35,
+    "smart_plug": 0.3,
+}
+
+
+def _importance(device_type: str) -> float:
+    return _DEVICE_IMPORTANCE.get(device_type, 0.5)
+
 
 def _build_graph_enrichment(devices: list[tuple[str, str]], index: int) -> GraphEnrichment:
-    source = devices[index % len(devices)][0]
-    n1 = devices[(index + 1) % len(devices)][0]
-    n2 = devices[(index + 2) % len(devices)][0]
+    source, source_type = devices[index % len(devices)]
+
+    # Dynamic blast radius based on source importance and current propagation risk.
+    # Low-importance devices should usually affect fewer neighbors.
     risk = round(0.25 + ((index % 8) / 10.0), 2)
     risk = min(risk, 0.95)
+    importance = _importance(source_type)
+    fanout = int(round(1 + importance * 3 + risk * 2))
+    fanout = max(1, min(5, fanout))
+
+    # Add a deterministic stride so same source does not always affect the exact same set.
+    stride = 1 if importance >= 0.8 else 2 if importance >= 0.5 else 3
+    neighbors = [
+        devices[(index + offset * stride) % len(devices)][0]
+        for offset in range(1, fanout + 1)
+    ]
+
     tactic, technique = _MITRE_ROTATION[index % len(_MITRE_ROTATION)]
+
+    next_targets = []
+    for offset, neighbor in enumerate(neighbors, start=1):
+        next_targets.append(
+            NextTargetPrediction(
+                device_id=neighbor,
+                score=round(min(0.99, risk + 0.14 - (offset - 1) * 0.06), 2),
+                why=_WHY_ROTATION[(index + offset) % len(_WHY_ROTATION)],
+            )
+        )
+
+    attack_paths: list[list[str]] = []
+    for path_index, neighbor in enumerate(neighbors):
+        hop2 = devices[(index + fanout + path_index + 1) % len(devices)][0]
+        if hop2 != source and hop2 != neighbor:
+            attack_paths.append([source, neighbor, hop2])
+        else:
+            attack_paths.append([source, neighbor])
 
     return GraphEnrichment(
         timestamp=datetime.now(tz=timezone.utc),
         source_device=source,
         propagation_risk=risk,
-        neighbors=[n1, n2],
-        next_target_prediction=[
-            NextTargetPrediction(
-                device_id=n1,
-                score=round(min(0.99, risk + 0.12), 2),
-                why=_WHY_ROTATION[index % len(_WHY_ROTATION)],
-            ),
-            NextTargetPrediction(
-                device_id=n2,
-                score=round(min(0.99, risk + 0.04), 2),
-                why=_WHY_ROTATION[(index + 3) % len(_WHY_ROTATION)],
-            ),
-        ],
-        attack_paths=[[source, n1], [source, n2]],
+        neighbors=neighbors,
+        next_target_prediction=next_targets,
+        attack_paths=attack_paths,
         mitre=MITRETag(tactic=tactic, technique=technique),
     )
 

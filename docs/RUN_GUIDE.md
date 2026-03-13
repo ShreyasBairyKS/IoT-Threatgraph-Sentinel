@@ -77,6 +77,20 @@ python graph/build_graph.py --input data/sample_flows.csv
 python graph/propagation.py --scores artifacts/ml_scores.json --output artifacts/graph_enrichment.json
 ```
 
+## Integrated P1 -> P2 (new model + next graph phase)
+
+```bash
+python ml/run_phase_pipeline.py --input data/sample_flows.csv --datapoints 5000
+```
+
+Outputs (default):
+
+- `artifacts/sample_flows_5000.csv`
+- `artifacts/features_5000.json`
+- `artifacts/ml_scores_5000.json`
+- `artifacts/graph_5000.json`
+- `artifacts/graph_enrichment_5000.json`
+
 ## P3 - Backend API and websocket
 
 ```bash

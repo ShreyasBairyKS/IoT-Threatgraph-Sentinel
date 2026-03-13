@@ -1,21 +1,40 @@
 import React, { useEffect, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { X, Shield, Target, ArrowRight, FileText, Download } from 'lucide-react';
+import { X, Shield, Target, ArrowRight, FileText } from 'lucide-react';
 import type { Device, AlertEvent, IncidentReport } from '../types/contracts';
-import { MOCK_RISK_TREND } from '../mocks/mockData';
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?? `${window.location.protocol}//${window.location.hostname}:8000`;
 
 interface IncidentPanelProps {
   device: Device | null;
   selectedAlert: AlertEvent | null;
   liveAlert: AlertEvent | null;
+  alerts: AlertEvent[];
   onClose: () => void;
 }
 
-export function IncidentPanel({ device, selectedAlert, liveAlert, onClose }: IncidentPanelProps) {
+export function IncidentPanel({ device, selectedAlert, liveAlert, alerts, onClose }: IncidentPanelProps) {
   const [report, setReport] = useState<IncidentReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+
+  const riskTrend = device
+    ? alerts
+        .filter((alert) => alert.device_id === device.device_id)
+        .slice(0, 10)
+        .reverse()
+        .map((alert) => ({
+          time: new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          risk: alert.risk_score,
+        }))
+    : [];
+
+  const trendData = riskTrend.length > 0
+    ? riskTrend
+    : [{
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        risk: device?.risk_score ?? 0,
+      }];
 
   // Fetch report for the pinned alert snapshot, not the moving live stream.
   useEffect(() => {
@@ -93,7 +112,7 @@ export function IncidentPanel({ device, selectedAlert, liveAlert, onClose }: Inc
         <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '12px 8px 8px', border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, paddingLeft: 4 }}>Risk Trend (last 10 min)</div>
           <ResponsiveContainer width="100%" height={90}>
-            <AreaChart data={MOCK_RISK_TREND} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+            <AreaChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
                 <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={chartColor} stopOpacity={0.4} />
@@ -181,20 +200,6 @@ export function IncidentPanel({ device, selectedAlert, liveAlert, onClose }: Inc
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 5 }}>
               <FileText size={11} /> Recommendations
             </div>
-            {selectedAlert && (
-              <a
-                href={`${API_BASE}/report/${selectedAlert.event_id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  fontSize: 11, color: 'var(--brand-from)', textDecoration: 'none',
-                  background: 'rgba(99,102,241,0.12)', borderRadius: 4, padding: '2px 8px',
-                }}
-              >
-                <Download size={10} /> PDF
-              </a>
-            )}
           </div>
 
           {reportLoading && (

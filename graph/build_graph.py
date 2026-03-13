@@ -4,6 +4,122 @@ import json
 import argparse
 from typing import List, Dict
 
+
+_FEATURE_KEYS = [
+    "flow_duration_mean",
+    "packet_rate",
+    "byte_volume",
+    "port_entropy",
+    "unique_dest_ips",
+    "tcp_ratio",
+    "udp_ratio",
+    "iat_mean",
+    "iat_std",
+]
+
+
+def _to_float(value: str | None) -> float | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    if not s:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _build_similarity_graph(rows: list[dict[str, str]]) -> nx.DiGraph:
+    """
+    Fallback graph build for feature-window datasets (no src/dst columns).
+
+    Builds one node per device_id, computes mean feature vectors, then adds edges
+    to top-K nearest peers by cosine similarity.
+    """
+    G = nx.DiGraph()
+    by_device: dict[str, dict[str, object]] = {}
+
+    for row in rows:
+        device_id = (row.get("device_id") or "").strip()
+        if not device_id:
+            continue
+        device_type = (row.get("device_type") or "unknown").strip() or "unknown"
+
+        entry = by_device.setdefault(
+            device_id,
+            {
+                "device_type": device_type,
+                "sum": {k: 0.0 for k in _FEATURE_KEYS},
+                "count": {k: 0 for k in _FEATURE_KEYS},
+            },
+        )
+        entry["device_type"] = device_type
+
+        sums = entry["sum"]
+        counts = entry["count"]
+        assert isinstance(sums, dict)
+        assert isinstance(counts, dict)
+        for key in _FEATURE_KEYS:
+            fv = _to_float(row.get(key))
+            if fv is None:
+                continue
+            sums[key] = float(sums.get(key, 0.0)) + fv
+            counts[key] = int(counts.get(key, 0)) + 1
+
+    vectors: dict[str, list[float]] = {}
+    for device_id, data in by_device.items():
+        sums = data["sum"]
+        counts = data["count"]
+        assert isinstance(sums, dict)
+        assert isinstance(counts, dict)
+        vec = []
+        for key in _FEATURE_KEYS:
+            cnt = int(counts.get(key, 0))
+            total = float(sums.get(key, 0.0))
+            vec.append((total / cnt) if cnt > 0 else 0.0)
+        vectors[device_id] = vec
+        G.add_node(device_id, device_type=str(data.get("device_type", "unknown")))
+
+    ids = list(vectors.keys())
+    if len(ids) < 2:
+        return G
+
+    # Feature-wise max for light normalization
+    max_vals = [0.0] * len(_FEATURE_KEYS)
+    for vec in vectors.values():
+        for idx, value in enumerate(vec):
+            if abs(value) > max_vals[idx]:
+                max_vals[idx] = abs(value)
+    max_vals = [m if m > 1e-9 else 1.0 for m in max_vals]
+
+    norm: dict[str, list[float]] = {
+        dev: [v / max_vals[i] for i, v in enumerate(vec)] for dev, vec in vectors.items()
+    }
+
+    def cosine(a: list[float], b: list[float]) -> float:
+        dot = sum(x * y for x, y in zip(a, b, strict=False))
+        na = sum(x * x for x in a) ** 0.5
+        nb = sum(y * y for y in b) ** 0.5
+        if na <= 1e-12 or nb <= 1e-12:
+            return 0.0
+        return dot / (na * nb)
+
+    k = min(3, len(ids) - 1)
+    for src in ids:
+        sims: list[tuple[str, float]] = []
+        for dst in ids:
+            if src == dst:
+                continue
+            score = cosine(norm[src], norm[dst])
+            sims.append((dst, score))
+        sims.sort(key=lambda x: x[1], reverse=True)
+        for dst, score in sims[:k]:
+            weight = max(1, int(round(score * 10)))
+            G.add_edge(src, dst, weight=weight, similarity=round(score, 4))
+
+    return G
+
 def build_graph_from_flows(csv_path: str) -> nx.DiGraph:
     """
     Builds a directed graph from network flow data.
@@ -15,23 +131,38 @@ def build_graph_from_flows(csv_path: str) -> nx.DiGraph:
     try:
         with open(csv_path, mode='r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
-            for row in reader:
+            rows = list(reader)
+
+            if not rows:
+                return G
+
+            # Preferred path: explicit communication edges
+            has_src_dst = any(
+                ((row.get('src_ip') or '').strip() and (row.get('dst_ip') or '').strip())
+                or ((row.get('source_device') or '').strip() and (row.get('target_device') or '').strip())
+                for row in rows
+            )
+
+            if not has_src_dst:
+                return _build_similarity_graph(rows)
+
+            for row in rows:
                 # The exact column names depend on the dataset (CIC-IoT-2023 / N-BaIoT)
                 # Assuming generic names for now: 'src_ip', 'dst_ip'
-                
+
                 # In docs, device representations often use IDs like 'cam-001'.
                 # We'll use source/dest as the node identifiers.
                 src = row.get('src_ip', row.get('source_device', 'unknown_src'))
                 dst = row.get('dst_ip', row.get('target_device', 'unknown_dst'))
-                
+
                 if src == 'unknown_src' or dst == 'unknown_dst':
                     continue
-                
+
                 if not G.has_node(src):
                     G.add_node(src)
                 if not G.has_node(dst):
                     G.add_node(dst)
-                    
+
                 if G.has_edge(src, dst):
                     G[src][dst]['weight'] += 1
                 else:
