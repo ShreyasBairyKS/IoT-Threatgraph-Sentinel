@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment variables
+.env
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ML artifacts (large binary files - track with Git LFS if needed)
+artifacts/models/*.pkl
+artifacts/models/*.pt
+artifacts/models/*.h5
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
