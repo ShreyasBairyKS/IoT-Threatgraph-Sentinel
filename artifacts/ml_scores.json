@@ -1,0 +1,88 @@
+{
+  "items": [
+    {
+      "timestamp": "2026-03-13T06:33:17Z",
+      "device_id": "cam-001",
+      "device_type": "camera",
+      "scores": {
+        "isolation_forest": 100.0,
+        "final_risk": 100.0,
+        "confidence": "high"
+      },
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
+    },
+    {
+      "timestamp": "2026-03-13T06:33:17Z",
+      "device_id": "sensor-07",
+      "device_type": "sensor",
+      "scores": {
+        "isolation_forest": 64.50953237069605,
+        "final_risk": 64.50953237069605,
+        "confidence": "medium"
+      },
+      "reason_codes": [],
+      "explanations": []
+    },
+    {
+      "timestamp": "2026-03-13T06:33:17Z",
+      "device_id": "router-02",
+      "device_type": "router",
+      "scores": {
+        "isolation_forest": 100.0,
+        "final_risk": 100.0,
+        "confidence": "high"
+      },
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
+    },
+    {
+      "timestamp": "2026-03-13T06:33:17Z",
+      "device_id": "nvr-01",
+      "device_type": "nvr",
+      "scores": {
+        "isolation_forest": 100.0,
+        "final_risk": 100.0,
+        "confidence": "high"
+      },
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
+    },
+    {
+      "timestamp": "2026-03-13T06:33:17Z",
+      "device_id": "access-ctrl-01",
+      "device_type": "access_controller",
+      "scores": {
+        "isolation_forest": 91.12191760215343,
+        "final_risk": 91.12191760215343,
+        "confidence": "high"
+      },
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
+    }
+  ]
+}

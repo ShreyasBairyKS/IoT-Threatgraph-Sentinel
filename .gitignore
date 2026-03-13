@@ -1,0 +1,46 @@
+# Python virtual environments
+.venv/
+venv/
+env/
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Pytest / test caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Environment files (may contain secrets)
+.env
+backend/.env
+frontend/.env
+
+# Node modules
+node_modules/
+frontend/node_modules/
+
+# Frontend build output
+frontend/dist/
+frontend/.next/
+
+# Model artifacts (large binaries — add explicitly if needed)
+artifacts/models/*.pkl
+artifacts/models/*.pt
+artifacts/models/*.joblib
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/

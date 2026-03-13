@@ -1,0 +1,2 @@
+# Day-1: stdlib-only to avoid environment/network issues.
+# Add numpy/pandas/scikit-learn later when model training is introduced.

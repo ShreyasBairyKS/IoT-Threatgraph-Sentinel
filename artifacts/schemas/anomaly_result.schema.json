@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AnomalyResult",
+  "type": "object",
+  "required": ["timestamp", "device_id", "device_type", "scores", "reason_codes", "explanations"],
+  "properties": {
+    "timestamp": { "type": "string" },
+    "device_id": { "type": "string", "minLength": 1 },
+    "device_type": { "type": "string", "minLength": 1 },
+    "scores": {
+      "type": "object",
+      "required": ["isolation_forest", "final_risk", "confidence"],
+      "properties": {
+        "isolation_forest": { "type": "number" },
+        "autoencoder": { "type": "number" },
+        "final_risk": { "type": "number", "minimum": 0, "maximum": 100 },
+        "confidence": { "type": "string", "enum": ["low", "medium", "high"] }
+      },
+      "additionalProperties": false
+    },
+    "reason_codes": { "type": "array", "items": { "type": "string" } },
+    "explanations": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
