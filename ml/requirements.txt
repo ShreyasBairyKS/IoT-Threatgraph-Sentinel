@@ -1,3 +1,6 @@
 # Day-2: ML training and inference dependencies
 numpy>=1.26
 scikit-learn>=1.4
+# Day-3 (optional): enables true SHAP tree explanations in ml.infer.
+# If not installed, the pipeline falls back to deterministic z-score explanations.
+# shap>=0.45

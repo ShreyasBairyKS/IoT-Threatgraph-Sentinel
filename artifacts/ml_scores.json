@@ -1,61 +1,66 @@
 {
   "items": [
     {
-      "timestamp": "2026-03-13T07:45:55Z",
+      "timestamp": "2026-03-13T07:59:03Z",
       "device_id": "cam-001",
       "device_type": "camera",
       "scores": {
         "isolation_forest": 51.422126033875934,
-        "final_risk": 51.422126033875934,
-        "confidence": "medium"
+        "final_risk": 42.513378201696234,
+        "confidence": "low",
+        "autoencoder": 21.726299926610267
       },
       "reason_codes": [],
       "explanations": []
     },
     {
-      "timestamp": "2026-03-13T07:45:55Z",
+      "timestamp": "2026-03-13T07:59:03Z",
       "device_id": "sensor-07",
       "device_type": "sensor",
       "scores": {
         "isolation_forest": 49.051915977416044,
-        "final_risk": 49.051915977416044,
-        "confidence": "low"
+        "final_risk": 52.75907656107172,
+        "confidence": "medium",
+        "autoencoder": 61.409117922934996
       },
       "reason_codes": [],
       "explanations": []
     },
     {
-      "timestamp": "2026-03-13T07:45:55Z",
+      "timestamp": "2026-03-13T07:59:03Z",
       "device_id": "router-02",
       "device_type": "router",
       "scores": {
         "isolation_forest": 46.84873955440585,
-        "final_risk": 46.84873955440585,
-        "confidence": "low"
+        "final_risk": 56.40982132742438,
+        "confidence": "medium",
+        "autoencoder": 78.71901213113429
       },
       "reason_codes": [],
       "explanations": []
     },
     {
-      "timestamp": "2026-03-13T07:45:55Z",
+      "timestamp": "2026-03-13T07:59:03Z",
       "device_id": "nvr-01",
       "device_type": "nvr",
       "scores": {
         "isolation_forest": 46.2433483932825,
-        "final_risk": 46.2433483932825,
-        "confidence": "low"
+        "final_risk": 48.40150358125621,
+        "confidence": "low",
+        "autoencoder": 53.437199019861524
       },
       "reason_codes": [],
       "explanations": []
     },
     {
-      "timestamp": "2026-03-13T07:45:55Z",
+      "timestamp": "2026-03-13T07:59:03Z",
       "device_id": "access-ctrl-01",
       "device_type": "access_controller",
       "scores": {
         "isolation_forest": 46.37578382620968,
-        "final_risk": 46.37578382620968,
-        "confidence": "low"
+        "final_risk": 42.87555997818444,
+        "confidence": "low",
+        "autoencoder": 34.70837099945889
       },
       "reason_codes": [],
       "explanations": []

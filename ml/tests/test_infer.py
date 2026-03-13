@@ -8,6 +8,7 @@ from pathlib import Path
 
 import numpy as np
 from sklearn.ensemble import IsolationForest, RandomForestClassifier
+from sklearn.neural_network import MLPRegressor
 from sklearn.preprocessing import StandardScaler
 
 from ml.features import FEATURE_KEYS
@@ -25,11 +26,19 @@ def _make_dummy_models(tmp_dir: Path) -> ModelBundle:
     X_sc = scaler.transform(X)
 
     iforest = IsolationForest(n_estimators=10, random_state=42).fit(X_sc)
+    autoencoder = MLPRegressor(hidden_layer_sizes=(8,), max_iter=200, random_state=42).fit(X_sc, X_sc)
+    ae_err = np.mean((X_sc - autoencoder.predict(X_sc)) ** 2, axis=1)
+    ae_meta = {
+        "error_mean": float(np.mean(ae_err)),
+        "error_std": float(np.std(ae_err) or 1.0),
+        "error_p95": float(np.percentile(ae_err, 95)),
+    }
     classes = ["camera", "router", "sensor"]
     y = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0])
     dt_clf = RandomForestClassifier(n_estimators=10, random_state=42).fit(X_sc, y)
 
     for name, obj in [("scaler.pkl", scaler), ("isolation_forest.pkl", iforest),
+                      ("autoencoder.pkl", autoencoder), ("autoencoder_meta.pkl", ae_meta),
                       ("device_classifier.pkl", dt_clf), ("device_classes.pkl", classes)]:
         with (tmp_dir / name).open("wb") as f:
             pickle.dump(obj, f)
@@ -39,6 +48,8 @@ def _make_dummy_models(tmp_dir: Path) -> ModelBundle:
         isolation_forest=iforest,
         device_classifier=dt_clf,
         device_classes=classes,
+        autoencoder=autoencoder,
+        autoencoder_meta=ae_meta,
     )
 
 
@@ -68,6 +79,7 @@ class TestInferWindow(unittest.TestCase):
         payload = result.to_contract_payload()
         for key in ("timestamp", "device_id", "device_type", "scores", "reason_codes", "explanations"):
             self.assertIn(key, payload)
+        self.assertIn("autoencoder", payload["scores"])
 
     def test_risk_within_bounds(self):
         result = infer_window(self.models, device_id="cam-001", device_type="camera",
@@ -105,10 +117,19 @@ class TestInferWindow(unittest.TestCase):
             isolation_forest=self.models.isolation_forest,
             device_classifier=None,
             device_classes=[],
+            autoencoder=self.models.autoencoder,
+            autoencoder_meta=self.models.autoencoder_meta,
         )
         result = infer_window(bundle_no_clf, device_id="x", device_type="camera",
                               features=SAMPLE_FEATURES)
         self.assertEqual(result.device_type, "camera")
+
+    def test_weighted_fusion_uses_autoencoder(self):
+        result = infer_window(self.models, device_id="cam-001", device_type="camera", features=SAMPLE_FEATURES)
+        self.assertIsNotNone(result.autoencoder)
+        assert result.autoencoder is not None
+        expected = np.clip(0.7 * result.isolation_forest + 0.3 * result.autoencoder, 0.0, 100.0)
+        self.assertAlmostEqual(result.final_risk, float(expected), places=6)
 
 
 class TestConfidence(unittest.TestCase):
@@ -124,6 +145,8 @@ class TestConfidence(unittest.TestCase):
 class TestReasonCodes(unittest.TestCase):
     def test_high_risk_produces_explanations(self):
         codes, exps = _reason_codes_and_explanations(
+            ModelBundle(None, None, None, [], None, None),
+            np.zeros((1, len(FEATURE_KEYS))),
             {"byte_volume": 90000, "packet_rate": 55, "unique_dest_ips": 10,
              "port_entropy": 2.5, "udp_ratio": 0.2}, risk=85.0
         )
@@ -132,6 +155,8 @@ class TestReasonCodes(unittest.TestCase):
 
     def test_low_risk_no_explanations(self):
         codes, exps = _reason_codes_and_explanations(
+            ModelBundle(None, None, None, [], None, None),
+            np.zeros((1, len(FEATURE_KEYS))),
             {"byte_volume": 1000, "packet_rate": 5}, risk=30.0
         )
         self.assertEqual(codes, [])
@@ -140,6 +165,8 @@ class TestReasonCodes(unittest.TestCase):
     def test_high_risk_at_least_two_explanations(self):
         """Handoff acceptance criterion: ≥2 explanation strings for high-risk."""
         codes, exps = _reason_codes_and_explanations(
+            ModelBundle(None, None, None, [], None, None),
+            np.zeros((1, len(FEATURE_KEYS))),
             {"byte_volume": 200000, "packet_rate": 100, "unique_dest_ips": 20,
              "port_entropy": 3.5, "udp_ratio": 0.1}, risk=90.0
         )
