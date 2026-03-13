@@ -1,17 +1,157 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { X, Shield, Target, ArrowRight } from 'lucide-react';
 import type { Device, AlertEvent, IncidentReport } from '../types/contracts';
-import { MOCK_RISK_TREND, MOCK_INCIDENT_REPORT } from '../mocks/mockData';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+function buildIdleReport(device: Device | null): IncidentReport {
+  const deviceId = device?.device_id ?? 'unselected-device';
+  return {
+    report_id: `idle-${deviceId}`,
+    generated_at: new Date().toISOString(),
+    incident_summary: `No active alert is selected for ${deviceId}.`,
+    affected_devices: device ? [device.device_id] : [],
+    evidence: {
+      risk_score: device?.risk_score ?? 0,
+      explanations: [],
+      mitre: [],
+    },
+    recommendations: [
+      `Monitor ${deviceId} for new anomalies and refresh the alert feed when new telemetry arrives.`,
+    ],
+  };
+}
+
+function buildTrendFallback(device: Device | null): Array<{ time: string; risk: number }> {
+  const baseRisk = Math.round(device?.risk_score ?? 0);
+  const now = new Date();
+  return Array.from({ length: 6 }, (_, index) => {
+    const pointTime = new Date(now.getTime() - (5 - index) * 60_000);
+    return {
+      time: pointTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      risk: baseRisk,
+    };
+  });
+}
+
+function buildLocalReport(alert: AlertEvent): IncidentReport {
+  return {
+    report_id: `local-${alert.event_id}`,
+    generated_at: new Date().toISOString(),
+    incident_summary: `${alert.mitre.tactic} observed on ${alert.device_id} (risk=${alert.risk_score.toFixed(1)}).`,
+    affected_devices: alert.graph.path.length > 0 ? alert.graph.path : [alert.device_id],
+    evidence: {
+      risk_score: alert.risk_score,
+      explanations: alert.reasons,
+      mitre: [alert.mitre],
+    },
+    recommendations: [
+      `Restrict ${alert.device_id} while the backend report service is unavailable.`,
+      `Review the alert evidence for ${alert.mitre.tactic} / ${alert.mitre.technique}.`,
+      'Preserve logs and packet captures before making irreversible changes.',
+    ],
+  };
+}
 
 interface IncidentPanelProps {
   device: Device | null;
   latestAlert: AlertEvent | null;
+  alerts: AlertEvent[];
   onClose: () => void;
 }
 
-export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelProps) {
-  const report: IncidentReport = MOCK_INCIDENT_REPORT;
+export function IncidentPanel({ device, latestAlert, alerts, onClose }: IncidentPanelProps) {
+  const [report, setReport] = useState<IncidentReport>(latestAlert ? buildLocalReport(latestAlert) : buildIdleReport(device));
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const trendData = useMemo(() => {
+    if (!device) {
+      return buildTrendFallback(null);
+    }
+    const points = alerts
+      .filter((a) => a.device_id === device.device_id)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+      .slice(-10)
+      .map((a) => ({
+        time: new Date(a.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        risk: a.risk_score,
+      }));
+    return points.length > 0 ? points : buildTrendFallback(device);
+  }, [alerts, device]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchReport = async () => {
+      if (!latestAlert) {
+        setReport(buildIdleReport(device));
+        setReportError(null);
+        return;
+      }
+
+      setReportLoading(true);
+      setReportError(null);
+      try {
+        const res = await fetch(`${API_BASE_URL}/report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(latestAlert),
+        });
+        if (!res.ok) {
+          throw new Error('Report endpoint returned a non-200 response.');
+        }
+        const liveReport = (await res.json()) as IncidentReport;
+        if (!cancelled) {
+          setReport(liveReport);
+        }
+      } catch {
+        if (!cancelled) {
+          setReport(buildLocalReport(latestAlert));
+          setReportError('Using local alert evidence because backend report generation failed.');
+        }
+      } finally {
+        if (!cancelled) {
+          setReportLoading(false);
+        }
+      }
+    };
+
+    fetchReport();
+    return () => {
+      cancelled = true;
+    };
+  }, [device, latestAlert]);
+
+  const handleDownloadPdf = async () => {
+    if (!latestAlert) {
+      return;
+    }
+
+    setDownloadingPdf(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/report/${latestAlert.event_id}/pdf`);
+      if (!res.ok) {
+        throw new Error('PDF endpoint returned a non-200 response.');
+      }
+      const blob = await res.blob();
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = href;
+      anchor.download = `incident_${latestAlert.event_id}.pdf`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      setReportError(null);
+    } catch {
+      setReportError('PDF download is available only for alerts stored in the backend alert store.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   if (!device) {
     return (
@@ -75,7 +215,7 @@ export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelPro
         <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '12px 8px 8px', border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, paddingLeft: 4 }}>Risk Trend (last 10 min)</div>
           <ResponsiveContainer width="100%" height={90}>
-            <AreaChart data={MOCK_RISK_TREND} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+            <AreaChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
                 <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={chartColor} stopOpacity={0.4} />
@@ -134,8 +274,43 @@ export function IncidentPanel({ device, latestAlert, onClose }: IncidentPanelPro
           </div>
         )}
 
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={handleDownloadPdf}
+            disabled={!latestAlert || downloadingPdf}
+            style={{
+              flex: 1,
+              border: '1px solid var(--border-accent)',
+              background: 'var(--bg-overlay)',
+              color: 'var(--text-primary)',
+              borderRadius: 'var(--radius-md)',
+              padding: '8px 10px',
+              fontSize: 12,
+              cursor: !latestAlert || downloadingPdf ? 'not-allowed' : 'pointer',
+              opacity: !latestAlert || downloadingPdf ? 0.6 : 1,
+            }}
+          >
+            {downloadingPdf ? 'Downloading PDF...' : 'Download Incident PDF'}
+          </button>
+        </div>
+
+        {reportError && (
+          <div style={{ fontSize: 11, color: 'var(--risk-high)' }}>
+            {reportError}
+          </div>
+        )}
+
+        {reportLoading && (
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+            Updating incident recommendations from backend...
+          </div>
+        )}
+
         {/* Recommendations */}
         <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: 12, border: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>
+            {report.incident_summary}
+          </div>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8 }}>Recommendations</div>
           {report.recommendations.map((rec, i) => (
             <div key={i} style={{ fontSize: 12, color: 'var(--text-primary)', marginBottom: 4, display: 'flex', gap: 6 }}>

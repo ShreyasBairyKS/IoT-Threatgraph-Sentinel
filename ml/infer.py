@@ -127,7 +127,8 @@ def _reason_codes_and_explanations(
     risk: float,
 ) -> tuple[list[str], list[str]]:
     """Generate reason codes and SHAP-like human-readable explanation strings."""
-    if risk < 70:
+    # Generate explanations for any risk above the alert threshold (65)
+    if risk < 60:
         return [], []
 
     codes: list[str] = []
@@ -193,10 +194,13 @@ def _reason_codes_and_explanations(
         codes.append("udp_dominance")
         exps.append(f"UDP traffic ratio ({udp_ratio:.0%}) is unusually high")
 
-    # Ensure at least 2 explanations for high-risk alerts (handoff requirement)
-    if risk >= 80 and len(exps) < 2:
+    # Ensure at least 2 explanations for alerted devices
+    if risk >= 60 and len(exps) < 2:
         codes.append("anomaly_model_flag")
-        exps.append("Isolation Forest model flagged this device window as anomalous")
+        exps.append("Isolation Forest model flagged this device window as a statistical anomaly")
+    if risk >= 80 and len(exps) < 3:
+        codes.append("critical_risk_threshold")
+        exps.append("Risk score exceeds critical threshold — immediate containment recommended")
 
     return codes, exps
 

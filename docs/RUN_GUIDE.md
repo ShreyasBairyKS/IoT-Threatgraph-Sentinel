@@ -169,10 +169,15 @@ curl -L http://localhost:8000/report/evt_4f20/pdf --output report_evt_4f20.pdf
 Use this order on Day 4:
 
 1. Start backend and frontend.
-2. Feed P1 score output into backend.
-3. Feed P2 enrichment output into backend.
-4. Confirm websocket updates appear in UI.
-5. Trigger report generation from UI and API.
+2. Run graph build first so `artifacts/graph.json` is populated.
+3. Run P1 scoring and produce `artifacts/ml_scores.json`.
+4. Run P2 propagation and produce `artifacts/graph_enrichment.json`.
+5. Feed P2 enrichment output into backend (`POST /ingest/graph` per object or `POST /ingest/graph/batch` for arrays).
+6. Feed P1 score output into backend (`POST /ingest/anomaly`).
+7. Confirm websocket updates appear in UI.
+8. Trigger report generation from UI and API.
+
+Note: if propagation runs against an empty graph, enrichments will contain empty neighbors/paths and near-zero propagation risk.
 
 ---
 

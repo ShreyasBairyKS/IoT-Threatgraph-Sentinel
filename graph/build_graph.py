@@ -9,6 +9,9 @@ def build_graph_from_flows(csv_path: str) -> nx.DiGraph:
     Builds a directed graph from network flow data.
     Nodes are devices (or IPs).
     Edges represent communication between devices, weighted by frequency or volume.
+
+    Supports both the synthetic IoT dataset columns (src_device / dst_device)
+    and raw IP-based columns (src_ip / dst_ip / source_device / target_device).
     """
     G = nx.DiGraph()
     
@@ -16,13 +19,19 @@ def build_graph_from_flows(csv_path: str) -> nx.DiGraph:
         with open(csv_path, mode='r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                # The exact column names depend on the dataset (CIC-IoT-2023 / N-BaIoT)
-                # Assuming generic names for now: 'src_ip', 'dst_ip'
-                
-                # In docs, device representations often use IDs like 'cam-001'.
-                # We'll use source/dest as the node identifiers.
-                src = row.get('src_ip', row.get('source_device', 'unknown_src'))
-                dst = row.get('dst_ip', row.get('target_device', 'unknown_dst'))
+                # Prefer logical device IDs; fall back to IP addresses
+                src = (
+                    row.get('src_device')
+                    or row.get('source_device')
+                    or row.get('src_ip')
+                    or 'unknown_src'
+                )
+                dst = (
+                    row.get('dst_device')
+                    or row.get('target_device')
+                    or row.get('dst_ip')
+                    or 'unknown_dst'
+                )
                 
                 if src == 'unknown_src' or dst == 'unknown_dst':
                     continue

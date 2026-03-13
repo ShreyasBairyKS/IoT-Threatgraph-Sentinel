@@ -41,12 +41,18 @@ def test_trace_attack_paths(sample_graph):
     assert found
 
 def test_map_mitre_tags():
-    # Test valid mapping
+    # Test valid mapping - dest_ip_diversity_jump → Lateral Movement
     tag = map_mitre_tags(["dest_ip_diversity_jump", "other_reason"])
     assert tag.tactic == "Lateral Movement"
     assert tag.technique == "T1021"
-    
-    # Test default
+
+    # Test another mapped code
+    tag = map_mitre_tags(["outbound_volume_spike"])
+    assert tag.tactic == "Exfiltration"
+    assert tag.technique == "T1048"
+
+    # Test default fallback for unknown reason codes
     tag = map_mitre_tags(["unknown_reason"])
     assert tag.tactic == "Impact"
-    assert tag.technique == "T1489"
+    # Default technique is T1499 (Endpoint Denial of Service / generic anomaly)
+    assert tag.technique == "T1499"

@@ -2,6 +2,180 @@
   "directed": true,
   "multigraph": false,
   "graph": {},
-  "nodes": [],
-  "links": []
+  "nodes": [
+    {
+      "id": "cam-001"
+    },
+    {
+      "id": "nvr-01"
+    },
+    {
+      "id": "cam-002"
+    },
+    {
+      "id": "cam-003"
+    },
+    {
+      "id": "sensor-01"
+    },
+    {
+      "id": "router-02"
+    },
+    {
+      "id": "sensor-02"
+    },
+    {
+      "id": "sensor-03"
+    },
+    {
+      "id": "door-ctrl-01"
+    },
+    {
+      "id": "router-01"
+    },
+    {
+      "id": "door-ctrl-02"
+    },
+    {
+      "id": "storage-01"
+    },
+    {
+      "id": "internet-benign"
+    },
+    {
+      "id": "external-unknown"
+    }
+  ],
+  "links": [
+    {
+      "weight": 3600,
+      "source": "cam-001",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 3600,
+      "source": "nvr-01",
+      "target": "storage-01"
+    },
+    {
+      "weight": 3600,
+      "source": "cam-002",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 3612,
+      "source": "cam-003",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 4800,
+      "source": "cam-003",
+      "target": "external-unknown"
+    },
+    {
+      "weight": 2354,
+      "source": "cam-003",
+      "target": "storage-01"
+    },
+    {
+      "weight": 2427,
+      "source": "cam-003",
+      "target": "door-ctrl-01"
+    },
+    {
+      "weight": 2309,
+      "source": "cam-003",
+      "target": "router-02"
+    },
+    {
+      "weight": 2472,
+      "source": "cam-003",
+      "target": "door-ctrl-02"
+    },
+    {
+      "weight": 2426,
+      "source": "cam-003",
+      "target": "router-01"
+    },
+    {
+      "weight": 3600,
+      "source": "sensor-01",
+      "target": "router-02"
+    },
+    {
+      "weight": 3600,
+      "source": "router-02",
+      "target": "internet-benign"
+    },
+    {
+      "weight": 3600,
+      "source": "sensor-02",
+      "target": "router-02"
+    },
+    {
+      "weight": 3600,
+      "source": "sensor-03",
+      "target": "router-02"
+    },
+    {
+      "weight": 3600,
+      "source": "door-ctrl-01",
+      "target": "router-01"
+    },
+    {
+      "weight": 2167,
+      "source": "door-ctrl-01",
+      "target": "external-unknown"
+    },
+    {
+      "weight": 470,
+      "source": "door-ctrl-01",
+      "target": "router-02"
+    },
+    {
+      "weight": 482,
+      "source": "door-ctrl-01",
+      "target": "storage-01"
+    },
+    {
+      "weight": 481,
+      "source": "door-ctrl-01",
+      "target": "door-ctrl-02"
+    },
+    {
+      "weight": 3600,
+      "source": "router-01",
+      "target": "internet-benign"
+    },
+    {
+      "weight": 1247,
+      "source": "router-01",
+      "target": "door-ctrl-02"
+    },
+    {
+      "weight": 1217,
+      "source": "router-01",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 1159,
+      "source": "router-01",
+      "target": "storage-01"
+    },
+    {
+      "weight": 1177,
+      "source": "router-01",
+      "target": "door-ctrl-01"
+    },
+    {
+      "weight": 3600,
+      "source": "door-ctrl-02",
+      "target": "router-01"
+    },
+    {
+      "weight": 3600,
+      "source": "storage-01",
+      "target": "nvr-01"
+    }
+  ]
 }

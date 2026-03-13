@@ -63,16 +63,19 @@ async def ws_alert_endpoint(websocket: WebSocket) -> None:
     """
     WS /ws/alerts handler.
 
-    On connect: immediately sends the latest mock alert so P4 sees
-    something right away.
+    On connect: immediately sends the latest real alert if one exists.
+    Mock/demo data is only sent when explicitly enabled.
     Then stays open for the duration of the connection.
     """
     await manager.connect(websocket)
     try:
-        # Send the most recent alert immediately upon connection
-        if MOCK_ALERTS:
-            latest = MOCK_ALERTS[0].model_dump(mode="json")
-            await manager.send_personal(websocket, latest)
+        from backend.store import alert_store
+
+        live_alerts = await alert_store.get_all()
+        if live_alerts:
+            await manager.send_personal(websocket, live_alerts[0].model_dump(mode="json"))
+        elif settings.ENABLE_MOCK_DATA and MOCK_ALERTS:
+            await manager.send_personal(websocket, MOCK_ALERTS[0].model_dump(mode="json"))
 
         # Keep connection alive; real pushes come from broadcast()
         while True:
@@ -88,15 +91,25 @@ async def mock_broadcast_loop() -> None:
     Background task that cycles through MOCK_ALERTS and broadcasts one
     every WS_MOCK_INTERVAL_SECONDS seconds.
 
-    Activated at startup. Day 3: this loop is replaced by real event pushes
-    from the ingestion pipeline calling manager.broadcast() directly.
+    Only broadcasts mock events when no real alerts have been ingested yet,
+    so it silently yields to the real pipeline the moment P1/P2 come online.
     """
+    from backend.store import alert_store
+
     index = 0
     while True:
         await asyncio.sleep(settings.WS_MOCK_INTERVAL_SECONDS)
-        if manager.active_connections and MOCK_ALERTS:
-            alert = MOCK_ALERTS[index % len(MOCK_ALERTS)]
-            payload = alert.model_dump(mode="json")
-            await manager.broadcast(payload)
-            logger.debug("Mock broadcast sent: %s", alert.event_id)
-            index += 1
+        if not settings.ENABLE_MOCK_DATA:
+            continue
+        if not manager.active_connections or not MOCK_ALERTS:
+            continue
+        # Suppress mock events once real alerts are flowing in
+        real_alerts = await alert_store.get_all()
+        if real_alerts:
+            logger.debug("Real alerts present — suppressing mock broadcast.")
+            continue
+        alert = MOCK_ALERTS[index % len(MOCK_ALERTS)]
+        payload = alert.model_dump(mode="json")
+        await manager.broadcast(payload)
+        logger.debug("Mock broadcast sent: %s", alert.event_id)
+        index += 1

@@ -110,6 +110,70 @@ Returns graph nodes, edges, and optional replay frame metadata.
 
 ---
 
+## `POST /ingest/graph`
+
+Ingest a single graph enrichment payload from P2.
+
+### Request
+
+```json
+{
+  "timestamp": "2026-03-12T09:01:05Z",
+  "source_device": "cam-001",
+  "propagation_risk": 0.81,
+  "neighbors": ["router-02", "nvr-01"],
+  "next_target_prediction": [
+    {"device_id": "router-02", "score": 0.88, "why": "high betweenness centrality"}
+  ],
+  "attack_paths": [["cam-001", "router-02", "access-ctrl-01"]],
+  "mitre": {"tactic": "Lateral Movement", "technique": "T1021"}
+}
+```
+
+### Response
+
+```json
+{
+  "status": "accepted",
+  "source_device": "cam-001"
+}
+```
+
+---
+
+## `POST /ingest/graph/batch`
+
+Ingest multiple graph enrichment payloads in one request.
+
+### Request
+
+```json
+[
+  {
+    "timestamp": "2026-03-12T09:01:05Z",
+    "source_device": "cam-001",
+    "propagation_risk": 0.81,
+    "neighbors": ["router-02"],
+    "next_target_prediction": [
+      {"device_id": "router-02", "score": 0.88, "why": "high betweenness centrality"}
+    ],
+    "attack_paths": [["cam-001", "router-02", "access-ctrl-01"]],
+    "mitre": {"tactic": "Lateral Movement", "technique": "T1021"}
+  }
+]
+```
+
+### Response
+
+```json
+{
+  "status": "accepted",
+  "count": 1
+}
+```
+
+---
+
 ## `POST /report`
 
 Generates structured incident output from alert evidence.
@@ -149,6 +213,19 @@ Generates structured incident output from alert evidence.
   "generated_at": "2026-03-12T09:12:00Z",
   "incident_summary": "Potential lateral movement initiated from cam-001",
   "affected_devices": ["cam-001", "router-02"],
+  "evidence": {
+    "risk_score": 87,
+    "explanations": [
+      "Outbound traffic is 6.8x above rolling baseline",
+      "Likely propagation path detected"
+    ],
+    "mitre": [
+      {
+        "tactic": "Lateral Movement",
+        "technique": "T1021"
+      }
+    ]
+  },
   "recommendations": [
     "Isolate cam-001 into quarantine VLAN",
     "Block outbound connections to unseen external endpoints"

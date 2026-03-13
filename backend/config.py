@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True
 
+    # Enable mock/demo fallbacks only when explicitly requested.
+    ENABLE_MOCK_DATA: bool = False
+
     # WebSocket broadcaster interval (seconds) in mock mode
     WS_MOCK_INTERVAL_SECONDS: float = 3.0
 
@@ -23,6 +26,11 @@ class Settings(BaseSettings):
 
     # In-memory store limit for recent alerts
     MAX_ALERT_STORE: int = 500
+
+    # Risk threshold above which an AnomalyResult becomes an AlertEvent.
+    # Calibrated at 65.0 on the synthetic test set (F1=0.857 @ threshold=65).
+    # Override via env var: ALERT_RISK_THRESHOLD=70
+    ALERT_RISK_THRESHOLD: float = 65.0
 
 
 settings = Settings()

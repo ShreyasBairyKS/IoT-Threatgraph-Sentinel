@@ -80,8 +80,8 @@ async def _process_anomaly(result: AnomalyResult) -> None:
         logger.info("Risk %.1f below threshold %.1f — no alert.", result.scores.final_risk, ALERT_RISK_THRESHOLD)
         return
 
-    # 3. Merge latest graph enrichment (may be None on early days)
-    graph = await graph_store.get()
+    # 3. Merge latest graph enrichment for this specific device (may be None on early days)
+    graph = await graph_store.get(device_id=result.device_id)
     alert = build_alert_event(result, graph)
 
     # 4. Store + broadcast
@@ -111,3 +111,18 @@ async def ingest_graph(enrichment: GraphEnrichment) -> dict[str, str]:
         enrichment.propagation_risk,
     )
     return {"status": "accepted", "source_device": enrichment.source_device}
+
+
+@router.post("/graph/batch", status_code=202)
+async def ingest_graph_batch(enrichments: list[GraphEnrichment]) -> dict[str, int | str]:
+    """
+    Receive a batch of GraphEnrichment payloads from the P2 graph-worker.
+
+    This endpoint exists to support P2 outputs that serialize multiple
+    enrichments in a single JSON array.
+    """
+    for enrichment in enrichments:
+        await graph_store.update(enrichment)
+
+    logger.info("Graph store batch updated: count=%d", len(enrichments))
+    return {"status": "accepted", "count": len(enrichments)}

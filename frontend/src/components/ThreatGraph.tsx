@@ -130,7 +130,7 @@ const CY_STYLE: StylesheetJson = [
 // ── Component ────────────────────────────────────────────────────────────
 interface ThreatGraphProps {
   devices: Device[];
-  enrichment: GraphEnrichment;
+  enrichment: GraphEnrichment | null;
   onNodeClick: (deviceId: string) => void;
 }
 
@@ -138,12 +138,12 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
 
-  const attackPath = enrichment.attack_paths[0] ?? [];
+  const attackPath = enrichment?.attack_paths[0] ?? [];
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const elements = buildElements(devices, enrichment, attackPath);
+    const elements = enrichment ? buildElements(devices, enrichment, attackPath) : [];
 
     const cy = cytoscape({
       container: containerRef.current,
@@ -182,11 +182,13 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
     const cy = cyRef.current;
     if (!cy) return;
     cy.elements().remove();
-    cy.add(buildElements(devices, enrichment, attackPath));
+    if (enrichment) {
+      cy.add(buildElements(devices, enrichment, attackPath));
+    }
     cy.layout({ name: 'cose', animate: true, padding: 40, fit: true }).run();
   }, [devices, enrichment]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const propagationPct = Math.round(enrichment.propagation_risk * 100);
+  const propagationPct = enrichment ? Math.round(enrichment.propagation_risk * 100) : null;
 
   return (
     <div className="panel" style={{ borderRight: 'none', flex: 1 }}>
@@ -194,10 +196,16 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
         <GitBranch size={14} className="icon" />
         Threat Graph
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text-secondary)', fontWeight: 400 }}>
-          propagation risk:{' '}
-          <strong style={{ color: propagationPct >= 70 ? 'var(--risk-high)' : 'var(--risk-medium)' }}>
-            {propagationPct}%
-          </strong>
+          {propagationPct === null ? (
+            'awaiting graph enrichment'
+          ) : (
+            <>
+              propagation risk:{' '}
+              <strong style={{ color: propagationPct >= 70 ? 'var(--risk-high)' : 'var(--risk-medium)' }}>
+                {propagationPct}%
+              </strong>
+            </>
+          )}
         </span>
       </div>
 
@@ -208,8 +216,24 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
           style={{ width: '100%', height: '100%', background: 'var(--bg-base)' }}
         />
 
+        {!enrichment && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'var(--text-muted)',
+            fontSize: 12,
+            pointerEvents: 'none',
+            background: 'linear-gradient(to bottom, rgba(0,0,0,0.08), rgba(0,0,0,0.16))',
+          }}>
+            Waiting for graph enrichment from the backend pipeline.
+          </div>
+        )}
+
         {/* Attack path badge */}
-        {attackPath.length > 0 && (
+        {enrichment && attackPath.length > 0 && (
           <div style={{
             position: 'absolute', top: 10, right: 12,
             background: 'rgba(239,68,68,0.12)',

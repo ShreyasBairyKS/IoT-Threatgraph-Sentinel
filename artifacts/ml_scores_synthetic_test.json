@@ -36,22 +36,8 @@
         "confidence": "medium",
         "autoencoder": 100.0
       },
-      "reason_codes": [
-        "feature_deviation_byte_volume",
-        "feature_deviation_packet_rate",
-        "feature_deviation_port_entropy",
-        "outbound_volume_spike",
-        "high_port_entropy",
-        "high_packet_rate"
-      ],
-      "explanations": [
-        "byte_volume deviates from baseline by z-score 5.17, raising anomaly risk.",
-        "packet_rate deviates from baseline by z-score 4.02, raising anomaly risk.",
-        "port_entropy deviates from baseline by z-score 3.20, raising anomaly risk.",
-        "Outbound byte volume (34,896,047) is elevated above baseline",
-        "Destination port entropy (3.57) suggests port scanning",
-        "Packet rate (152.1 pps) significantly above device baseline"
-      ]
+      "reason_codes": [],
+      "explanations": []
     },
     {
       "timestamp": "2026-03-13T10:50:00Z",
@@ -63,22 +49,8 @@
         "confidence": "medium",
         "autoencoder": 100.0
       },
-      "reason_codes": [
-        "feature_deviation_packet_rate",
-        "feature_deviation_port_entropy",
-        "feature_deviation_byte_volume",
-        "outbound_volume_spike",
-        "high_port_entropy",
-        "high_packet_rate"
-      ],
-      "explanations": [
-        "packet_rate deviates from baseline by z-score 2.01, raising anomaly risk.",
-        "port_entropy deviates from baseline by z-score 1.66, raising anomaly risk.",
-        "byte_volume deviates from baseline by z-score 0.76, raising anomaly risk.",
-        "Outbound byte volume (7,258,710) is elevated above baseline",
-        "Destination port entropy (2.08) suggests port scanning",
-        "Packet rate (88.5 pps) significantly above device baseline"
-      ]
+      "reason_codes": [],
+      "explanations": []
     },
     {
       "timestamp": "2026-03-13T10:03:00Z",
@@ -103,18 +75,8 @@
         "confidence": "medium",
         "autoencoder": 100.0
       },
-      "reason_codes": [
-        "feature_deviation_flow_duration_mean",
-        "feature_deviation_tcp_ratio",
-        "feature_deviation_udp_ratio",
-        "outbound_volume_spike"
-      ],
-      "explanations": [
-        "flow_duration_mean deviates from baseline by z-score 2.20, raising anomaly risk.",
-        "tcp_ratio deviates from baseline by z-score 0.74, raising anomaly risk.",
-        "udp_ratio deviates from baseline by z-score 0.74, raising anomaly risk.",
-        "Outbound byte volume (1,480,332) is elevated above baseline"
-      ]
+      "reason_codes": [],
+      "explanations": []
     },
     {
       "timestamp": "2026-03-13T10:51:00Z",
@@ -126,22 +88,8 @@
         "confidence": "medium",
         "autoencoder": 100.0
       },
-      "reason_codes": [
-        "feature_deviation_packet_rate",
-        "feature_deviation_port_entropy",
-        "feature_deviation_byte_volume",
-        "outbound_volume_spike",
-        "high_port_entropy",
-        "high_packet_rate"
-      ],
-      "explanations": [
-        "packet_rate deviates from baseline by z-score 2.99, raising anomaly risk.",
-        "port_entropy deviates from baseline by z-score 2.39, raising anomaly risk.",
-        "byte_volume deviates from baseline by z-score 1.38, raising anomaly risk.",
-        "Outbound byte volume (11,143,454) is elevated above baseline",
-        "Destination port entropy (2.79) suggests port scanning",
-        "Packet rate (119.7 pps) significantly above device baseline"
-      ]
+      "reason_codes": [],
+      "explanations": []
     },
     {
       "timestamp": "2026-03-13T10:35:00Z",
@@ -153,20 +101,8 @@
         "confidence": "medium",
         "autoencoder": 81.51379519863312
       },
-      "reason_codes": [
-        "feature_deviation_flow_duration_mean",
-        "feature_deviation_port_entropy",
-        "feature_deviation_udp_ratio",
-        "outbound_volume_spike",
-        "udp_dominance"
-      ],
-      "explanations": [
-        "flow_duration_mean deviates from baseline by z-score 0.78, raising anomaly risk.",
-        "port_entropy deviates from baseline by z-score 0.56, raising anomaly risk.",
-        "udp_ratio deviates from baseline by z-score 0.50, raising anomaly risk.",
-        "Outbound byte volume (139,091) is elevated above baseline",
-        "UDP traffic ratio (52%) is unusually high"
-      ]
+      "reason_codes": [],
+      "explanations": []
     },
     {
       "timestamp": "2026-03-13T10:35:00Z",

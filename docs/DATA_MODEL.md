@@ -67,6 +67,11 @@ This document defines core payload schemas and model fields used across ML, grap
 }
 ```
 
+### Notes
+
+- `scores.autoencoder` is optional and may be `null` or omitted when autoencoder artifacts are not available.
+- P3 accepts anomaly results with only `isolation_forest`, `final_risk`, and `confidence`.
+
 ---
 
 ## 4. Graph Enrichment Schema (P2 -> P3/P4)
@@ -149,6 +154,12 @@ This document defines core payload schemas and model fields used across ML, grap
 - `medium`
 - `high`
 
+Confidence thresholds used by P1 (`ml/infer.py`):
+
+- `high`: `final_risk >= 80`
+- `medium`: `50 <= final_risk < 80`
+- `low`: `final_risk < 50`
+
 ### `severity`
 
 - `low`
@@ -156,9 +167,41 @@ This document defines core payload schemas and model fields used across ML, grap
 - `high`
 - `critical`
 
+Severity thresholds used by P3 (`backend/store.py`):
+
+- `critical`: `risk_score >= 85`
+- `high`: `70 <= risk_score < 85`
+- `medium`: `50 <= risk_score < 70`
+- `low`: `risk_score < 50`
+
 ---
 
-## 8. Storage Mapping
+## 8. Raw Flow CSV Input Schema
+
+`ml/features.py` derives feature windows from raw flow rows using the fields below.
+
+Required for meaningful extraction:
+
+- `device_id`
+- at least one timestamp field: `timestamp`, `ts`, or `time`
+
+Expected raw flow fields (missing values are imputed):
+
+- `flow_duration`
+- `packet_rate`
+- `byte_volume`
+- `dest_ip`
+- `dest_port`
+- `protocol`
+- `iat`
+
+Supported pre-aggregated path:
+
+- Records that already contain at least 6 of the 9 feature keys in section 2 are treated as pre-aggregated windows.
+
+---
+
+## 9. Storage Mapping
 
 | Data | Primary Store |
 |---|---|
@@ -171,7 +214,7 @@ This document defines core payload schemas and model fields used across ML, grap
 
 ---
 
-## 9. Contract Governance
+## 10. Contract Governance
 
 - Contract files are frozen on Day 1.
 - Any breaking schema change requires approval from P1, P2, P3, and P4.

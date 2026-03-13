@@ -36,7 +36,7 @@ class FeatureWindow(BaseModel):
 
 class AnomalyScores(BaseModel):
     isolation_forest: float
-    autoencoder: float
+    autoencoder: Optional[float] = None
     final_risk: float
     confidence: Literal["low", "medium", "high"]
 

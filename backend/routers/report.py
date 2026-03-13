@@ -13,6 +13,7 @@ from fastapi.responses import Response
 
 from backend.contracts import AlertEvent, IncidentReport
 from backend.store import alert_store
+from backend.mocks.mock_store import MOCK_ALERTS
 from backend.reporting.generate_report import build_report
 from backend.reporting.export_pdf import export_pdf
 
@@ -37,6 +38,10 @@ async def download_pdf(event_id: str) -> Response:
     exports to PDF bytes, returns as application/pdf attachment.
     """
     alert = await alert_store.get_by_id(event_id)
+    if alert is None:
+        # Dev fallback: allow PDF generation for baseline mock alerts.
+        alert = next((a for a in MOCK_ALERTS if a.event_id == event_id), None)
+
     if alert is None:
         raise HTTPException(status_code=404, detail=f"Alert '{event_id}' not found in store.")
 

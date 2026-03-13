@@ -4,15 +4,35 @@ import argparse
 from typing import Dict, List, Tuple
 from datetime import datetime
 
-from graph.models import AnomalyResult, GraphEnrichment, NextTargetPrediction, MitreTag
+from backend.contracts import (
+    AnomalyResult,
+    GraphEnrichment,
+    MITRETag,
+    NextTargetPrediction,
+)
 
-# MITRE ATT&CK Mapping
+# MITRE ATT&CK Mapping — reason_code → ATT&CK tactic/technique
+# Aligned with codes emitted by ml/infer.py _reason_codes_and_explanations()
 MITRE_MAPPING = {
-    "outbound_volume_spike": MitreTag(tactic="Exfiltration", technique="T1048"),
-    "dest_ip_diversity_jump": MitreTag(tactic="Lateral Movement", technique="T1021"),
-    # Add more as needed based on P1's anomaly result payload reason codes.
+    # Exfiltration indicators
+    "outbound_volume_spike":    MITRETag(tactic="Exfiltration",         technique="T1048"),
+    # Lateral movement indicators
+    "dest_ip_diversity_jump":   MITRETag(tactic="Lateral Movement",     technique="T1021"),
+    # Reconnaissance / discovery
+    "high_port_entropy":        MITRETag(tactic="Discovery",            technique="T1046"),
+    # C2 / beaconing
+    "high_packet_rate":         MITRETag(tactic="Command and Control",  technique="T1071"),
+    "udp_dominance":            MITRETag(tactic="Command and Control",  technique="T1095"),
+    # Feature-level anomaly codes
+    "anomaly_model_flag":       MITRETag(tactic="Impact",               technique="T1499"),
+    "critical_risk_threshold":  MITRETag(tactic="Impact",               technique="T1499"),
+    # SHAP-derived codes — map the most common feature deviations
+    "feature_deviation_byte_volume":      MITRETag(tactic="Exfiltration",    technique="T1048"),
+    "feature_deviation_unique_dest_ips": MITRETag(tactic="Lateral Movement", technique="T1021"),
+    "feature_deviation_port_entropy":    MITRETag(tactic="Discovery",        technique="T1046"),
+    "feature_deviation_packet_rate":     MITRETag(tactic="Command and Control", technique="T1071"),
 }
-DEFAULT_MITRE = MitreTag(tactic="Impact", technique="T1489") # Generic default
+DEFAULT_MITRE = MITRETag(tactic="Impact", technique="T1499")  # Generic anomaly fallback
 
 def calculate_propagation_risk(G: nx.DiGraph, anomalous_node: str, base_risk: float) -> Tuple[float, List[NextTargetPrediction]]:
     """
@@ -67,7 +87,7 @@ def trace_attack_paths(G: nx.DiGraph, start_node: str, depth: int = 2) -> List[L
     # Filter out length-1 paths (just the root node)
     return [p for p in paths if len(p) > 1]
     
-def map_mitre_tags(reason_codes: List[str]) -> MitreTag:
+def map_mitre_tags(reason_codes: List[str]) -> MITRETag:
     for code in reason_codes:
         if code in MITRE_MAPPING:
             return MITRE_MAPPING[code]
@@ -81,6 +101,12 @@ def process_anomalies(graph_path: str, scores_path: str, output_path: str):
     except Exception as e:
         print(f"Failed to load graph from {graph_path}: {e}")
         return
+
+    if G.number_of_nodes() == 0:
+        print(
+            "Warning: graph is empty. Run graph/build_graph.py first to populate artifacts/graph.json "
+            "before running propagation."
+        )
 
     try:
         with open(scores_path, 'r') as f:

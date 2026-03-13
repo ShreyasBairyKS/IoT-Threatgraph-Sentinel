@@ -1,0 +1,254 @@
+"""
+run_pipeline.py — End-to-end IoT ThreatGraph Sentinel pipeline runner.
+
+Wires:
+  P1: ml.replay_score  → scores CSV → artifacts/ml_scores.json
+  P2: graph.build_graph + graph.propagation → artifacts/graph.json + graph_enrichment.json
+  P3: POST /ingest/anomaly and POST /ingest/graph to the live backend
+
+Usage:
+    python run_pipeline.py                              # defaults (sample flows)
+    python run_pipeline.py --csv data/external/synthetic_iot_flows_test.csv
+    python run_pipeline.py --csv data/external/synthetic_iot_flows_train.csv --api http://localhost:8000
+
+The script can also be run without a live backend (--no-ingest) to just produce
+the artifact JSON files for inspection or replay.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import sys
+import time
+import urllib.request
+import urllib.error
+from pathlib import Path
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(message)s")
+log = logging.getLogger(__name__)
+
+ARTIFACTS = Path("artifacts")
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _post_json(url: str, payload: dict) -> dict:
+    data = json.dumps(payload, default=str).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def check_backend(api: str) -> bool:
+    try:
+        with urllib.request.urlopen(f"{api}/health", timeout=5) as resp:
+            data = json.loads(resp.read())
+            return data.get("status") == "ok"
+    except Exception:
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Step 1: ML scoring (P1)
+# ---------------------------------------------------------------------------
+
+def run_ml_scoring(csv_path: Path, model_dir: Path, output_path: Path) -> Path:
+    log.info("[P1] Running ML scoring on %s ...", csv_path)
+    from ml.features import build_windows, load_csv
+    from ml.infer import infer_window, load_models
+    from ml.score_window import ScoreResult, score_features
+
+    records = load_csv(csv_path)
+    if not records:
+        log.warning("[P1] No records found in %s. Skipping scoring.", csv_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(json.dumps({"items": []}, indent=2), encoding="utf-8")
+        return output_path
+
+    device_type_map: dict[str, str] = {}
+    for rec in records:
+        dev_id = str(rec.get("device_id", "")).strip()
+        dev_type = str(rec.get("device_type", "")).strip()
+        if dev_id and dev_type:
+            device_type_map[dev_id] = dev_type
+
+    windows = build_windows(records)
+    for w in windows:
+        w["device_type"] = device_type_map.get(w.get("device_id", ""), "unknown")
+
+    items: list[dict] = []
+    try:
+        models = load_models(model_dir)
+        best_by_device: dict[str, ScoreResult] = {}
+        for w in windows:
+            device_id = str(w.get("device_id", "unknown"))
+            result = infer_window(
+                models,
+                device_id=device_id,
+                device_type=str(w.get("device_type", "unknown")),
+                features=w.get("features", {}),
+                timestamp=str(w.get("window_end", "")) or None,
+            )
+            prev = best_by_device.get(device_id)
+            if prev is None or result.final_risk > prev.final_risk:
+                best_by_device[device_id] = result
+        items = [best_by_device[d].to_contract_payload() for d in sorted(best_by_device)]
+        log.info("[P1] Scored %d devices using trained models.", len(items))
+    except Exception as exc:
+        log.warning("[P1] Trained models unavailable (%s) — using heuristic fallback.", exc)
+        from collections import defaultdict
+        feat_by_device: dict[str, list[dict]] = defaultdict(list)
+        for w in windows:
+            feat_by_device[str(w.get("device_id", "unknown"))].append(w.get("features", {}))
+        for dev, flist in sorted(feat_by_device.items()):
+            keys = set().union(*(f.keys() for f in flist))
+            avg = {k: sum(float(f.get(k, 0.0)) for f in flist) / len(flist) for k in keys}
+            result = score_features(
+                device_id=dev,
+                device_type=device_type_map.get(dev, "unknown"),
+                features=avg,
+            )
+            items.append(result.to_contract_payload())
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps({"items": items}, indent=2), encoding="utf-8")
+    log.info("[P1] Wrote %d ML scores to %s", len(items), output_path)
+    return output_path
+
+
+# ---------------------------------------------------------------------------
+# Step 2: Graph build + propagation (P2)
+# ---------------------------------------------------------------------------
+
+def run_graph_pipeline(csv_path: Path, scores_path: Path) -> tuple[Path, Path]:
+    log.info("[P2] Building graph from %s ...", csv_path)
+    import networkx as nx
+    from graph.build_graph import build_graph_from_flows, save_graph
+
+    G = build_graph_from_flows(str(csv_path))
+    graph_path = ARTIFACTS / "graph.json"
+    save_graph(G, str(graph_path))
+    log.info("[P2] Graph: %d nodes, %d edges.", G.number_of_nodes(), G.number_of_edges())
+
+    log.info("[P2] Computing propagation enrichment ...")
+    from graph.propagation import process_anomalies
+    enrichment_path = ARTIFACTS / "graph_enrichment.json"
+    process_anomalies(str(graph_path), str(scores_path), str(enrichment_path))
+    return graph_path, enrichment_path
+
+
+# ---------------------------------------------------------------------------
+# Step 3: Ingest into backend (P3)
+# ---------------------------------------------------------------------------
+
+def ingest_into_backend(api: str, scores_path: Path, enrichment_path: Path) -> None:
+    log.info("[P3] Ingesting into backend at %s ...", api)
+
+    scores_data = json.loads(scores_path.read_text(encoding="utf-8"))
+    items = scores_data.get("items", [])
+
+    raw = json.loads(enrichment_path.read_text(encoding="utf-8"))
+    enrichments = raw if isinstance(raw, list) else [raw]
+
+    # ── Step A: Push graph enrichments first ─────────────────────────────
+    # The alert builder looks up the graph enrichment for the anomalous device
+    # when `ingest/anomaly` fires.  Enrichments must be stored BEFORE anomaly
+    # results so the merger finds the right MITRE tags and propagation paths.
+    graph_ok = 0
+    for enrichment in enrichments:
+        try:
+            _post_json(f"{api}/ingest/graph", enrichment)
+            graph_ok += 1
+        except Exception as exc:
+            log.warning("[P3] Failed to ingest graph enrichment: %s", exc)
+    log.info("[P3] Graph enrichment ingested (%d / %d items).", graph_ok, len(enrichments))
+
+    # ── Step B: Push anomaly results (alert creation happens here) ────────
+    ingested = 0
+    skipped = 0
+    for item in items:
+        scores = item.get("scores", {})
+        payload = {
+            "timestamp": item.get("timestamp"),
+            "device_id": item["device_id"],
+            "device_type": item.get("device_type", "unknown"),
+            "scores": {
+                "isolation_forest": scores.get("isolation_forest", 0.0),
+                "autoencoder": scores.get("autoencoder", 0.0),
+                "final_risk": scores.get("final_risk", 0.0),
+                "confidence": scores.get("confidence", "low"),
+            },
+            "reason_codes": item.get("reason_codes", []),
+            "explanations": item.get("explanations", []),
+        }
+        try:
+            _post_json(f"{api}/ingest/anomaly", payload)
+            ingested += 1
+        except Exception as exc:
+            log.warning("[P3] Failed to ingest anomaly for %s: %s", item["device_id"], exc)
+            skipped += 1
+        time.sleep(0.05)  # gentle pacing to avoid flooding the backend
+
+    log.info("[P3] Anomaly results ingested: %d ok / %d skipped.", ingested, skipped)
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="IoT ThreatGraph Sentinel — End-to-End Pipeline Runner")
+    ap.add_argument("--csv",       default="data/sample_flows.csv",
+                    help="Input flow CSV (default: data/sample_flows.csv).")
+    ap.add_argument("--model-dir", default="artifacts/models",
+                    help="Directory with trained model artifacts.")
+    ap.add_argument("--scores-out", default="artifacts/ml_scores.json",
+                    help="Path to write ML scores JSON.")
+    ap.add_argument("--api",       default="http://localhost:8000",
+                    help="Backend API base URL.")
+    ap.add_argument("--no-ingest", action="store_true",
+                    help="Skip posting results to the backend.")
+    args = ap.parse_args()
+
+    csv_path    = Path(args.csv)
+    model_dir   = Path(args.model_dir)
+    scores_path = Path(args.scores_out)
+
+    if not csv_path.exists():
+        log.error("Input CSV not found: %s", csv_path)
+        sys.exit(1)
+
+    # P1 — ML scoring
+    run_ml_scoring(csv_path, model_dir, scores_path)
+
+    # P2 — Graph pipeline
+    _, enrichment_path = run_graph_pipeline(csv_path, scores_path)
+
+    # P3 — Backend ingest
+    if args.no_ingest:
+        log.info("--no-ingest specified. Skipping backend POST.")
+    else:
+        if not check_backend(args.api):
+            log.warning(
+                "Backend at %s is not reachable. "
+                "Start it with: uvicorn backend.main:app --reload --port 8000",
+                args.api,
+            )
+            log.warning("Use --no-ingest to skip this check.")
+            sys.exit(1)
+        ingest_into_backend(args.api, scores_path, enrichment_path)
+
+    log.info("Pipeline complete.")
+
+
+if __name__ == "__main__":
+    main()

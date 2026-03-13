@@ -20,7 +20,7 @@ import logging
 import uuid
 from collections import deque
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from backend.config import settings
 from backend.contracts import (
@@ -36,11 +36,13 @@ logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Risk threshold: anomaly results at or above this become AlertEvents
+# Calibrated value from synthetic evaluation: F1=0.857 @ threshold=65.0
+# Override via ALERT_RISK_THRESHOLD env var (see backend/config.py)
 # ---------------------------------------------------------------------------
-ALERT_RISK_THRESHOLD = 60.0
+ALERT_RISK_THRESHOLD: float = settings.ALERT_RISK_THRESHOLD
 
 # Severity bands
-def _risk_to_severity(score: float) -> str:
+def _risk_to_severity(score: float) -> Literal["low", "medium", "high", "critical"]:
     if score >= 85:
         return "critical"
     if score >= 70:
@@ -88,19 +90,37 @@ class DeviceRegistry:
 
 
 class GraphStore:
-    """Latest GraphEnrichment snapshot."""
+    """
+    Per-device GraphEnrichment store.
+
+    Each enrichment is stored keyed by `source_device` so that when a device's
+    anomaly triggers an alert we can look up its specific graph context rather
+    than relying on a single global snapshot.
+
+    `get(device_id)` returns the enrichment for that device, or `None`.
+    `get_latest()` is kept for backward-compatibility (returns the most
+    recently stored enrichment).
+    """
 
     def __init__(self) -> None:
-        self._snapshot: Optional[GraphEnrichment] = None
+        self._by_device: dict[str, GraphEnrichment] = {}
+        self._latest: Optional[GraphEnrichment] = None
         self._lock = asyncio.Lock()
 
     async def update(self, enrichment: GraphEnrichment) -> None:
         async with self._lock:
-            self._snapshot = enrichment
+            self._by_device[enrichment.source_device] = enrichment
+            self._latest = enrichment
 
-    async def get(self) -> Optional[GraphEnrichment]:
+    async def get(self, device_id: str | None = None) -> Optional[GraphEnrichment]:
+        """
+        Return the enrichment for *device_id* if provided, otherwise return the
+        most recently ingested enrichment (legacy behaviour).
+        """
         async with self._lock:
-            return self._snapshot
+            if device_id is not None:
+                return self._by_device.get(device_id) or self._latest
+            return self._latest
 
 
 # ---------------------------------------------------------------------------

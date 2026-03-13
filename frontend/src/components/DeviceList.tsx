@@ -1,5 +1,5 @@
 import React from 'react';
-import { Monitor, Wifi, Server, Camera, Thermometer, Shield } from 'lucide-react';
+import { Monitor, Wifi, Server, Camera, Thermometer, Shield, Lock, HardDrive } from 'lucide-react';
 import type { Device } from '../types/contracts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
@@ -20,12 +20,15 @@ function getRiskColor(score: number): string {
 }
 
 const DEVICE_ICON: Record<string, React.ReactNode> = {
-  camera:         <Camera size={14} />,
-  router:         <Wifi size={14} />,
-  nvr:            <Server size={14} />,
-  sensor:         <Monitor size={14} />,
-  access_control: <Shield size={14} />,
-  thermostat:     <Thermometer size={14} />,
+  camera:            <Camera size={14} />,
+  router:            <Wifi size={14} />,
+  nvr:               <Server size={14} />,
+  sensor:            <Monitor size={14} />,
+  access_control:    <Shield size={14} />,
+  access_controller: <Shield size={14} />,
+  door_controller:   <Lock size={14} />,
+  storage:           <HardDrive size={14} />,
+  thermostat:        <Thermometer size={14} />,
 };
 
 // ── Single device row ────────────────────────────────────────────────────

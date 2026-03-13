@@ -19,5 +19,5 @@ async def get_graph() -> GraphEnrichment:
     Return the latest graph enrichment snapshot.
     Falls back to mock data when no P2 data has arrived yet.
     """
-    live = await graph_store.get()
+    live = await graph_store.get()  # returns latest (no device_id filter)
     return live if live else MOCK_GRAPH

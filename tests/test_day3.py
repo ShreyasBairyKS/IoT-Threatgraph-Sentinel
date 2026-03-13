@@ -131,8 +131,7 @@ class TestST02_AnomalyAlert:
         client.post("/ingest/anomaly", json=HIGH_ANOMALY)
         r = client.get("/alerts")
         cam_alerts = [a for a in r.json() if a["device_id"] == "cam-st02"]
-        # 84 is in the 'high' band (70-84); 'critical' is >= 85
-        assert cam_alerts[0]["severity"] in ("high", "critical")
+        assert cam_alerts[0]["severity"] == "high"
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +160,13 @@ class TestST03_PropagationPath:
         cam_alerts = [a for a in r.json() if a["device_id"] == "cam-st02"]
         assert cam_alerts
         assert "router-02" in cam_alerts[0]["graph"]["next_targets"]
+
+    def test_graph_batch_ingest_is_accepted(self):
+        """P3 should accept array payloads from P2 via /ingest/graph/batch."""
+        payload = [GRAPH_WITH_PATH]
+        r = client.post("/ingest/graph/batch", json=payload)
+        assert r.status_code == 202
+        assert r.json()["count"] == 1
 
 
 # ---------------------------------------------------------------------------
