@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-03-13T10:11:00Z",
+    "timestamp": "2026-03-13T10:50:00Z",
     "source_device": "cam-001",
     "propagation_risk": 0.108,
     "neighbors": [
@@ -25,9 +25,84 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:24:00Z",
+    "timestamp": "2026-03-13T10:40:00Z",
     "source_device": "cam-002",
-    "propagation_risk": 0.109,
+    "propagation_risk": 0.237,
+    "neighbors": [
+      "nvr-01",
+      "external-unknown",
+      "door-ctrl-01",
+      "router-02",
+      "storage-01",
+      "door-ctrl-02",
+      "router-01"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "nvr-01",
+        "score": 0.257,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "storage-01",
+        "score": 0.252,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "router-01",
+        "score": 0.065,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "external-unknown",
+        "score": 0.055,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "door-ctrl-02",
+        "score": 0.033,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "cam-002",
+        "nvr-01"
+      ],
+      [
+        "cam-002",
+        "external-unknown"
+      ],
+      [
+        "cam-002",
+        "door-ctrl-01"
+      ],
+      [
+        "cam-002",
+        "router-02"
+      ],
+      [
+        "cam-002",
+        "storage-01"
+      ],
+      [
+        "cam-002",
+        "door-ctrl-02"
+      ],
+      [
+        "cam-002",
+        "router-01"
+      ]
+    ],
+    "mitre": {
+      "tactic": "Exfiltration",
+      "technique": "T1048"
+    }
+  },
+  {
+    "timestamp": "2026-03-13T11:00:00Z",
+    "source_device": "cam-003",
+    "propagation_risk": 0.108,
     "neighbors": [
       "nvr-01"
     ],
@@ -40,7 +115,7 @@
     ],
     "attack_paths": [
       [
-        "cam-002",
+        "cam-003",
         "nvr-01"
       ]
     ],
@@ -50,115 +125,40 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:52:00Z",
-    "source_device": "cam-003",
-    "propagation_risk": 0.239,
-    "neighbors": [
-      "nvr-01",
-      "external-unknown",
-      "storage-01",
-      "door-ctrl-01",
-      "router-02",
-      "door-ctrl-02",
-      "router-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "nvr-01",
-        "score": 0.257,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "storage-01",
-        "score": 0.251,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "router-01",
-        "score": 0.066,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "external-unknown",
-        "score": 0.055,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "door-ctrl-02",
-        "score": 0.034,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "cam-003",
-        "nvr-01"
-      ],
-      [
-        "cam-003",
-        "external-unknown"
-      ],
-      [
-        "cam-003",
-        "storage-01"
-      ],
-      [
-        "cam-003",
-        "door-ctrl-01"
-      ],
-      [
-        "cam-003",
-        "router-02"
-      ],
-      [
-        "cam-003",
-        "door-ctrl-02"
-      ],
-      [
-        "cam-003",
-        "router-01"
-      ]
-    ],
-    "mitre": {
-      "tactic": "Exfiltration",
-      "technique": "T1048"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T10:50:00Z",
+    "timestamp": "2026-03-13T10:57:00Z",
     "source_device": "door-ctrl-01",
-    "propagation_risk": 0.293,
+    "propagation_risk": 0.271,
     "neighbors": [
       "router-01",
-      "external-unknown",
-      "router-02",
       "storage-01",
+      "router-02",
+      "external-unknown",
       "door-ctrl-02"
     ],
     "next_target_prediction": [
       {
         "device_id": "storage-01",
-        "score": 0.183,
+        "score": 0.181,
         "why": "high flow volume"
       },
       {
         "device_id": "router-01",
-        "score": 0.154,
+        "score": 0.155,
         "why": "high flow volume"
       },
       {
         "device_id": "external-unknown",
-        "score": 0.074,
+        "score": 0.075,
         "why": "high flow volume"
       },
       {
         "device_id": "door-ctrl-02",
-        "score": 0.036,
+        "score": 0.035,
         "why": "high flow volume"
       },
       {
         "device_id": "router-02",
-        "score": 0.016,
+        "score": 0.017,
         "why": "high flow volume"
       }
     ],
@@ -169,7 +169,7 @@
       ],
       [
         "door-ctrl-01",
-        "external-unknown"
+        "storage-01"
       ],
       [
         "door-ctrl-01",
@@ -177,7 +177,7 @@
       ],
       [
         "door-ctrl-01",
-        "storage-01"
+        "external-unknown"
       ],
       [
         "door-ctrl-01",
@@ -185,14 +185,14 @@
       ]
     ],
     "mitre": {
-      "tactic": "Command and Control",
-      "technique": "T1071"
+      "tactic": "Discovery",
+      "technique": "T1046"
     }
   },
   {
-    "timestamp": "2026-03-13T10:03:00Z",
+    "timestamp": "2026-03-13T10:16:00Z",
     "source_device": "door-ctrl-02",
-    "propagation_risk": 0.176,
+    "propagation_risk": 0.175,
     "neighbors": [
       "router-01"
     ],
@@ -215,9 +215,9 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:24:00Z",
+    "timestamp": "2026-03-13T10:53:00Z",
     "source_device": "nvr-01",
-    "propagation_risk": 0.532,
+    "propagation_risk": 0.533,
     "neighbors": [
       "storage-01"
     ],
@@ -240,25 +240,25 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:51:00Z",
+    "timestamp": "2026-03-13T10:49:00Z",
     "source_device": "router-01",
-    "propagation_risk": 0.304,
+    "propagation_risk": 0.301,
     "neighbors": [
       "internet-benign",
       "door-ctrl-02",
-      "nvr-01",
       "storage-01",
-      "door-ctrl-01"
+      "door-ctrl-01",
+      "nvr-01"
     ],
     "next_target_prediction": [
       {
-        "device_id": "nvr-01",
+        "device_id": "storage-01",
         "score": 0.249,
         "why": "high flow volume"
       },
       {
-        "device_id": "storage-01",
-        "score": 0.249,
+        "device_id": "nvr-01",
+        "score": 0.247,
         "why": "high flow volume"
       },
       {
@@ -268,12 +268,12 @@
       },
       {
         "device_id": "door-ctrl-02",
-        "score": 0.04,
+        "score": 0.039,
         "why": "high flow volume"
       },
       {
         "device_id": "door-ctrl-01",
-        "score": 0.036,
+        "score": 0.038,
         "why": "high flow volume"
       }
     ],
@@ -288,15 +288,15 @@
       ],
       [
         "router-01",
-        "nvr-01"
-      ],
-      [
-        "router-01",
         "storage-01"
       ],
       [
         "router-01",
         "door-ctrl-01"
+      ],
+      [
+        "router-01",
+        "nvr-01"
       ]
     ],
     "mitre": {
@@ -305,9 +305,9 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:35:00Z",
+    "timestamp": "2026-03-13T10:47:00Z",
     "source_device": "router-02",
-    "propagation_risk": 0.491,
+    "propagation_risk": 0.473,
     "neighbors": [
       "internet-benign"
     ],
@@ -325,12 +325,12 @@
       ]
     ],
     "mitre": {
-      "tactic": "Discovery",
-      "technique": "T1046"
+      "tactic": "Impact",
+      "technique": "T1499"
     }
   },
   {
-    "timestamp": "2026-03-13T10:35:00Z",
+    "timestamp": "2026-03-13T10:37:00Z",
     "source_device": "sensor-01",
     "propagation_risk": 0.264,
     "neighbors": [
@@ -355,9 +355,9 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:34:00Z",
+    "timestamp": "2026-03-13T10:52:00Z",
     "source_device": "sensor-02",
-    "propagation_risk": 0.261,
+    "propagation_risk": 0.264,
     "neighbors": [
       "router-02"
     ],
@@ -380,9 +380,9 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:51:00Z",
+    "timestamp": "2026-03-13T10:49:00Z",
     "source_device": "sensor-03",
-    "propagation_risk": 0.264,
+    "propagation_risk": 0.261,
     "neighbors": [
       "router-02"
     ],
@@ -405,9 +405,9 @@
     }
   },
   {
-    "timestamp": "2026-03-13T10:12:00Z",
+    "timestamp": "2026-03-13T10:34:00Z",
     "source_device": "storage-01",
-    "propagation_risk": 0.383,
+    "propagation_risk": 0.39,
     "neighbors": [
       "nvr-01"
     ],

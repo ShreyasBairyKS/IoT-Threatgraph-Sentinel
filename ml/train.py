@@ -16,10 +16,19 @@ from __future__ import annotations
 import argparse
 import pickle
 from pathlib import Path
+from typing import Protocol
 
 import numpy as np
 
 from ml.features import FEATURE_KEYS, build_windows, load_csv
+
+
+class SupportsTransform(Protocol):
+    def transform(self, X: np.ndarray) -> np.ndarray: ...
+
+
+class SupportsPredict(Protocol):
+    def predict(self, X: np.ndarray) -> np.ndarray: ...
 
 # ---------------------------------------------------------------------------
 # Vector helpers
@@ -56,14 +65,14 @@ def train_isolation_forest(X: np.ndarray, random_state: int = 42) -> object:
     """
     Fit an IsolationForest on feature matrix X.
 
-    contamination=0.15 means ~15 % of training windows treated as anomalies —
+    contamination='auto' means the contamination parameter is automatically determined —
     reasonable for a mixed benign/attack replay dataset.
     """
     from sklearn.ensemble import IsolationForest  # type: ignore[import]
 
     clf = IsolationForest(
         n_estimators=200,
-        contamination=0.15,
+        contamination='auto',
         random_state=random_state,
         n_jobs=-1,
     )
@@ -132,7 +141,7 @@ def train_device_classifier(
 # StandardScaler fitting
 # ---------------------------------------------------------------------------
 
-def fit_scaler(X: np.ndarray) -> object:
+def fit_scaler(X: np.ndarray) -> SupportsTransform:
     from sklearn.preprocessing import StandardScaler  # type: ignore[import]
 
     scaler = StandardScaler()
@@ -140,7 +149,7 @@ def fit_scaler(X: np.ndarray) -> object:
     return scaler
 
 
-def train_autoencoder(X: np.ndarray, random_state: int = 42) -> object:
+def train_autoencoder(X: np.ndarray, random_state: int = 42) -> SupportsPredict:
     """
     Train a lightweight MLP autoencoder surrogate (X -> X reconstruction).
 
@@ -159,7 +168,7 @@ def train_autoencoder(X: np.ndarray, random_state: int = 42) -> object:
     return ae
 
 
-def autoencoder_error(autoencoder: object, X: np.ndarray) -> np.ndarray:
+def autoencoder_error(autoencoder: SupportsPredict, X: np.ndarray) -> np.ndarray:
     """Return per-sample reconstruction MSE."""
     recon = autoencoder.predict(X)
     return np.mean((X - recon) ** 2, axis=1)

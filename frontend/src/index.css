@@ -321,3 +321,103 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 .btn-ghost:hover { background: var(--bg-overlay); color: var(--text-primary); }
+
+/* ── Threat Simulator Drawer ─────────────────────────────────────────── */
+.sim-panel {
+  position: fixed;
+  top: 60px;
+  right: 14px;
+  width: 360px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 74px);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card), var(--shadow-glow);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sim-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sim-panel-body {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.sim-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.sim-control {
+  width: 100%;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 7px 8px;
+}
+
+.sim-help {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.sim-reasons {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px;
+}
+
+.sim-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.sim-status {
+  font-size: 12px;
+  color: var(--risk-low);
+  background: rgba(34, 197, 94, 0.08);
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  border-radius: var(--radius-sm);
+  padding: 7px 8px;
+}
+
+/* ── Compromise toast ──────────────────────────────────────────────── */
+.compromise-toast {
+  position: fixed;
+  left: 50%;
+  top: 66px;
+  transform: translateX(-50%);
+  z-index: 60;
+  background: rgba(239, 68, 68, 0.14);
+  border: 1px solid rgba(239, 68, 68, 0.55);
+  color: #fecaca;
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  max-width: min(92vw, 760px);
+}

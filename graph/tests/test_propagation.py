@@ -1,7 +1,6 @@
 import pytest
 import networkx as nx
 from datetime import datetime
-from graph.models import GraphEnrichment, MitreTag, NextTargetPrediction, AnomalyResult, AnomalyScores
 from graph.propagation import calculate_propagation_risk, trace_attack_paths, map_mitre_tags
 
 @pytest.fixture

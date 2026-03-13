@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     # WebSocket broadcaster interval (seconds) in mock mode
     WS_MOCK_INTERVAL_SECONDS: float = 3.0
 
+    # Synthetic stream interval (seconds) for continuous backend feed generation.
+    SYNTHETIC_STREAM_INTERVAL_SECONDS: float = 10.0
+
+    # Enable synthetic stream in runtime (auto-disabled during pytest by app lifespan).
+    SYNTHETIC_STREAM_ENABLED: bool = True
+
     # Polling fallback interval for clients that cannot use WebSocket
     POLL_FALLBACK_INTERVAL_SECONDS: int = 3
 

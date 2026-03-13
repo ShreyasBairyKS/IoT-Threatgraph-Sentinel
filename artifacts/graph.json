@@ -58,44 +58,44 @@
       "target": "storage-01"
     },
     {
-      "weight": 3600,
+      "weight": 3581,
       "source": "cam-002",
       "target": "nvr-01"
     },
     {
-      "weight": 3612,
-      "source": "cam-003",
-      "target": "nvr-01"
-    },
-    {
       "weight": 4800,
-      "source": "cam-003",
+      "source": "cam-002",
       "target": "external-unknown"
     },
     {
-      "weight": 2354,
-      "source": "cam-003",
-      "target": "storage-01"
-    },
-    {
-      "weight": 2427,
-      "source": "cam-003",
+      "weight": 2397,
+      "source": "cam-002",
       "target": "door-ctrl-01"
     },
     {
-      "weight": 2309,
-      "source": "cam-003",
+      "weight": 2430,
+      "source": "cam-002",
       "target": "router-02"
     },
     {
-      "weight": 2472,
-      "source": "cam-003",
+      "weight": 2438,
+      "source": "cam-002",
+      "target": "storage-01"
+    },
+    {
+      "weight": 2394,
+      "source": "cam-002",
       "target": "door-ctrl-02"
     },
     {
-      "weight": 2426,
-      "source": "cam-003",
+      "weight": 2360,
+      "source": "cam-002",
       "target": "router-01"
+    },
+    {
+      "weight": 3600,
+      "source": "cam-003",
+      "target": "nvr-01"
     },
     {
       "weight": 3600,
@@ -123,22 +123,22 @@
       "target": "router-01"
     },
     {
-      "weight": 2167,
-      "source": "door-ctrl-01",
-      "target": "external-unknown"
-    },
-    {
-      "weight": 470,
-      "source": "door-ctrl-01",
-      "target": "router-02"
-    },
-    {
-      "weight": 482,
+      "weight": 459,
       "source": "door-ctrl-01",
       "target": "storage-01"
     },
     {
-      "weight": 481,
+      "weight": 501,
+      "source": "door-ctrl-01",
+      "target": "router-02"
+    },
+    {
+      "weight": 2168,
+      "source": "door-ctrl-01",
+      "target": "external-unknown"
+    },
+    {
+      "weight": 472,
       "source": "door-ctrl-01",
       "target": "door-ctrl-02"
     },
@@ -148,24 +148,24 @@
       "target": "internet-benign"
     },
     {
-      "weight": 1247,
+      "weight": 1190,
       "source": "router-01",
       "target": "door-ctrl-02"
     },
     {
-      "weight": 1217,
-      "source": "router-01",
-      "target": "nvr-01"
-    },
-    {
-      "weight": 1159,
+      "weight": 1212,
       "source": "router-01",
       "target": "storage-01"
     },
     {
-      "weight": 1177,
+      "weight": 1246,
       "source": "router-01",
       "target": "door-ctrl-01"
+    },
+    {
+      "weight": 1152,
+      "source": "router-01",
+      "target": "nvr-01"
     },
     {
       "weight": 3600,

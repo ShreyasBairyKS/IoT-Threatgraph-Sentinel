@@ -122,6 +122,26 @@ const CY_STYLE: StylesheetJson = [
     },
   },
   {
+    selector: 'edge.path-visited',
+    style: {
+      'line-color': '#f97316',
+      'target-arrow-color': '#f97316',
+      'width': 3,
+      'opacity': 1,
+      'line-style': 'solid',
+    },
+  },
+  {
+    selector: 'edge.path-step',
+    style: {
+      'line-color': '#f43f5e',
+      'target-arrow-color': '#f43f5e',
+      'width': 4,
+      'opacity': 1,
+      'line-style': 'solid',
+    },
+  },
+  {
     selector: ':selected',
     style: { 'border-color': '#818cf8', 'border-width': 3 },
   },
@@ -137,8 +157,64 @@ interface ThreatGraphProps {
 export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const animationTimersRef = useRef<number[]>([]);
+  const lastAnimationKeyRef = useRef<string>('');
 
   const attackPath = enrichment?.attack_paths[0] ?? [];
+
+  const clearAnimationTimers = () => {
+    for (const timerId of animationTimersRef.current) {
+      window.clearTimeout(timerId);
+    }
+    animationTimersRef.current = [];
+  };
+
+  const runAttackPathAnimation = (cy: Core, path: string[]) => {
+    clearAnimationTimers();
+    cy.edges().removeClass('path-step path-visited');
+
+    if (path.length < 2) {
+      return;
+    }
+
+    const stepMs = 300;
+    for (let i = 0; i < path.length - 1; i++) {
+      const source = path[i];
+      const target = path[i + 1];
+
+      const timerId = window.setTimeout(() => {
+        const edge = cy.$(`edge[source = "${source}"][target = "${target}"]`).first();
+        if (!edge.empty()) {
+          edge.removeClass('path-visited');
+          edge.addClass('path-step');
+        }
+
+        if (i > 0) {
+          const prevSource = path[i - 1];
+          const prevTarget = path[i];
+          const prevEdge = cy.$(`edge[source = "${prevSource}"][target = "${prevTarget}"]`).first();
+          if (!prevEdge.empty()) {
+            prevEdge.removeClass('path-step');
+            prevEdge.addClass('path-visited');
+          }
+        }
+      }, i * stepMs);
+
+      animationTimersRef.current.push(timerId);
+    }
+
+    const finalTimer = window.setTimeout(() => {
+      const lastSource = path[path.length - 2];
+      const lastTarget = path[path.length - 1];
+      const lastEdge = cy.$(`edge[source = "${lastSource}"][target = "${lastTarget}"]`).first();
+      if (!lastEdge.empty()) {
+        lastEdge.removeClass('path-step');
+        lastEdge.addClass('path-visited');
+      }
+    }, (path.length - 1) * stepMs);
+
+    animationTimersRef.current.push(finalTimer);
+  };
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -173,7 +249,10 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
     });
 
     cyRef.current = cy;
-    return () => cy.destroy();
+    return () => {
+      clearAnimationTimers();
+      cy.destroy();
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -181,12 +260,24 @@ export function ThreatGraph({ devices, enrichment, onNodeClick }: ThreatGraphPro
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
+
     cy.elements().remove();
     if (enrichment) {
       cy.add(buildElements(devices, enrichment, attackPath));
     }
-    cy.layout({ name: 'cose', animate: true, padding: 40, fit: true }).run();
+
+    const layout = cy.layout({ name: 'cose', animate: true, padding: 40, fit: true });
+    layout.run();
+
+    const animationKey = `${enrichment?.timestamp ?? 'none'}|${attackPath.join('->')}`;
+    if (animationKey !== lastAnimationKeyRef.current) {
+      lastAnimationKeyRef.current = animationKey;
+      const timerId = window.setTimeout(() => runAttackPathAnimation(cy, attackPath), 220);
+      animationTimersRef.current.push(timerId);
+    }
   }, [devices, enrichment]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => clearAnimationTimers(), []);
 
   const propagationPct = enrichment ? Math.round(enrichment.propagation_risk * 100) : null;
 

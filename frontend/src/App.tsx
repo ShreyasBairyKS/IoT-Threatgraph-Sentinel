@@ -6,6 +6,7 @@ import { ThreatGraph } from './components/ThreatGraph';
 import { AlertFeed } from './components/AlertFeed';
 import { IncidentPanel } from './components/IncidentPanel';
 import { ReplayTimeline } from './components/ReplayTimeline';
+import { SimulateThreatPanel } from './components/SimulateThreatPanel';
 import { buildReplayFrames } from './components/replayUtils';
 
 import { MockWebSocket } from './mocks/mockWebSocket';
@@ -17,7 +18,7 @@ import {
 
 import type { AlertEvent, Device } from './types/contracts';
 import type { GraphEnrichment } from './types/contracts';
-import { Activity, Wifi } from 'lucide-react';
+import { Activity, Wifi, FlaskConical } from 'lucide-react';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000/ws/alerts';
@@ -27,12 +28,16 @@ const MOCKS_ENABLED = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === 'true';
 export default function App() {
   // State
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
+  const [feedEvents, setFeedEvents] = useState<AlertEvent[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [graphEnrichment, setGraphEnrichment] = useState<GraphEnrichment | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
   const [latestAlert, setLatestAlert] = useState<AlertEvent | null>(null);
   const [replayIndex, setReplayIndex] = useState(0);
   const [wsStatus, setWsStatus] = useState<'live' | 'mock' | 'offline'>('offline');
+  const [showSimulator, setShowSimulator] = useState(false);
+  const [compromiseToast, setCompromiseToast] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
 
   // Build replay frames from alerts
   const replayFrames = buildReplayFrames(alerts);
@@ -43,12 +48,38 @@ export default function App() {
     devicesRef.current = devices;
   }, [devices]);
 
+  const refreshGraph = useCallback(async () => {
+    try {
+      const graphRes = await fetch(`${API_BASE_URL}/graph`);
+      if (!graphRes.ok) {
+        return;
+      }
+      const liveGraph = await graphRes.json() as GraphEnrichment;
+      setGraphEnrichment(liveGraph ?? null);
+    } catch {
+      // Keep existing graph state when refresh fails.
+    }
+  }, []);
+
+  const refreshFeed = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/feed?limit=300`);
+      if (res.ok) {
+        const data = await res.json() as AlertEvent[];
+        setFeedEvents(data);
+      }
+    } catch {
+      // keep existing feed state on transient failure
+    }
+  }, []);
+
   const fetchInitialData = useCallback(async () => {
     try {
-      const [devicesRes, alertsRes, graphRes] = await Promise.all([
+      const [devicesRes, alertsRes, graphRes, feedRes] = await Promise.all([
         fetch(`${API_BASE_URL}/devices`),
         fetch(`${API_BASE_URL}/alerts`),
         fetch(`${API_BASE_URL}/graph`),
+        fetch(`${API_BASE_URL}/feed?limit=300`),
       ]);
 
       if (!devicesRes.ok || !alertsRes.ok || !graphRes.ok) {
@@ -65,16 +96,23 @@ export default function App() {
       setAlerts(liveAlerts);
       setGraphEnrichment(liveGraph ?? null);
       setLatestAlert(liveAlerts[0] ?? null);
+
+      if (feedRes.ok) {
+        const liveFeed = await feedRes.json() as AlertEvent[];
+        setFeedEvents(liveFeed);
+      }
     } catch {
       if (MOCKS_ENABLED) {
         setDevices(MOCK_DEVICES);
         setAlerts(MOCK_ALERTS);
+        setFeedEvents(MOCK_ALERTS);
         setGraphEnrichment(MOCK_GRAPH_ENRICHMENT);
         setLatestAlert(MOCK_ALERTS[0] ?? null);
         setWsStatus('mock');
       } else {
         setDevices([]);
         setAlerts([]);
+        setFeedEvents([]);
         setGraphEnrichment(null);
         setLatestAlert(null);
         setWsStatus('offline');
@@ -97,6 +135,35 @@ export default function App() {
         return [evt, ...prev].slice(0, 50);
       });
       setLatestAlert(evt);
+
+      // Optimistically reflect graph details included in the live alert,
+      // then reconcile with backend /graph for the latest enrichment snapshot.
+      setGraphEnrichment({
+        timestamp: evt.timestamp,
+        source_device: evt.device_id,
+        propagation_risk: Math.max(0, Math.min(1, evt.risk_score / 100)),
+        neighbors: evt.graph.next_targets,
+        next_target_prediction: evt.graph.next_targets.map((id) => ({
+          device_id: id,
+          score: 0.5,
+          why: 'derived from alert event',
+        })),
+        attack_paths: [evt.graph.path],
+        mitre: evt.mitre,
+      });
+      void refreshGraph();
+
+      if (evt.severity === 'high' || evt.severity === 'critical') {
+        const message = `${evt.device_id} device has been compromised via ${evt.mitre.tactic} (${evt.mitre.technique}).`;
+        setCompromiseToast(message);
+        if (toastTimerRef.current !== null) {
+          window.clearTimeout(toastTimerRef.current);
+        }
+        toastTimerRef.current = window.setTimeout(() => {
+          setCompromiseToast(null);
+          toastTimerRef.current = null;
+        }, 4800);
+      }
 
       setDevices((prev) => {
         const idx = prev.findIndex((d) => d.device_id === evt.device_id);
@@ -164,7 +231,11 @@ export default function App() {
       startMockFallback();
     }
 
+    // Poll /feed every 10 s so all-severity events stay fresh
+    const feedInterval = window.setInterval(() => { void refreshFeed(); }, 10_000);
+
     return () => {
+      window.clearInterval(feedInterval);
       if (liveWsRef.current) {
         liveWsRef.current.close();
         liveWsRef.current = null;
@@ -173,8 +244,12 @@ export default function App() {
         fallbackWs.disconnect();
         wsRef.current = null;
       }
+      if (toastTimerRef.current !== null) {
+        window.clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
     };
-  }, [fetchInitialData]);
+  }, [fetchInitialData, refreshGraph, refreshFeed]);
 
   // Node click from graph → open IncidentPanel
   const handleNodeClick = useCallback((deviceId: string) => {
@@ -224,6 +299,15 @@ export default function App() {
         </div>
 
         <div className="top-bar-meta">
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => setShowSimulator((prev) => !prev)}
+            aria-label="Toggle threat simulator"
+          >
+            <FlaskConical size={12} />
+            {showSimulator ? 'Hide Simulator' : 'Simulate Threat'}
+          </button>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <Activity size={12} />
             {alerts.length} alerts
@@ -268,6 +352,7 @@ export default function App() {
           ) : (
             <AlertFeed
               alerts={alerts}
+              feedEvents={feedEvents}
               onAlertClick={handleAlertClick}
             />
           )}
@@ -280,6 +365,25 @@ export default function App() {
           onChange={handleReplayChange}
         />
       </div>
+
+      <SimulateThreatPanel
+        open={showSimulator}
+        devices={devices}
+        apiBaseUrl={API_BASE_URL}
+        onGraphInjected={(enrichment) => {
+          setGraphEnrichment(enrichment);
+          void refreshGraph();
+          // Refresh feed shortly after so manual simulation shows in All Feed
+          window.setTimeout(() => { void refreshFeed(); }, 600);
+        }}
+        onClose={() => setShowSimulator(false)}
+      />
+
+      {compromiseToast && (
+        <div className="compromise-toast" role="status" aria-live="polite">
+          {compromiseToast}
+        </div>
+      )}
     </div>
   );
 }

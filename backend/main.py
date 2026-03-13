@@ -26,10 +26,12 @@ from typing import AsyncGenerator
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.config import settings
+from backend.config import settings  # noqa: E402
 from backend.routers import devices, alerts, graph, report
 from backend.routers import ingest
+from backend.routers import feed as feed_router
 from backend.ws.broadcaster import manager, ws_alert_endpoint, mock_broadcast_loop
+from backend.ws.synthetic_stream import synthetic_stream_loop
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s | %(name)s | %(message)s")
 logger = logging.getLogger(__name__)
@@ -41,12 +43,22 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Start the mock WS broadcaster on server startup."""
+    """Start background tasks on server startup."""
     logger.info("Starting mock WebSocket broadcaster...")
     broadcast_task = asyncio.create_task(mock_broadcast_loop())
+
+    if settings.SYNTHETIC_STREAM_ENABLED:
+        logger.info("Starting synthetic stream (interval=%.1fs)...", settings.SYNTHETIC_STREAM_INTERVAL_SECONDS)
+        stream_task = asyncio.create_task(synthetic_stream_loop())
+    else:
+        stream_task = None
+
     yield
+
     broadcast_task.cancel()
-    logger.info("Mock broadcaster stopped.")
+    if stream_task is not None:
+        stream_task.cancel()
+    logger.info("Background tasks stopped.")
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +92,7 @@ app.add_middleware(
 
 app.include_router(devices.router)
 app.include_router(alerts.router)
+app.include_router(feed_router.router)
 app.include_router(graph.router)
 app.include_router(report.router)
 app.include_router(ingest.router)

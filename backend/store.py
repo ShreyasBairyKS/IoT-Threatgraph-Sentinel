@@ -73,6 +73,23 @@ class AlertStore:
             return next((a for a in self._alerts if a.event_id == event_id), None)
 
 
+class FeedStore:
+    """Thread-safe in-memory deque for all anomaly-derived feed events."""
+
+    def __init__(self, maxlen: int = settings.MAX_ALERT_STORE * 4) -> None:
+        self._events: deque[AlertEvent] = deque(maxlen=maxlen)
+        self._lock = asyncio.Lock()
+
+    async def add(self, event: AlertEvent) -> None:
+        async with self._lock:
+            self._events.appendleft(event)
+        logger.info("Feed event stored: %s severity=%s risk=%.1f", event.event_id, event.severity, event.risk_score)
+
+    async def get_all(self) -> list[AlertEvent]:
+        async with self._lock:
+            return list(self._events)
+
+
 class DeviceRegistry:
     """Latest DeviceSummary keyed by device_id."""
 
@@ -158,5 +175,6 @@ def build_alert_event(
 # ---------------------------------------------------------------------------
 
 alert_store = AlertStore()
+feed_store = FeedStore()
 device_registry = DeviceRegistry()
 graph_store = GraphStore()

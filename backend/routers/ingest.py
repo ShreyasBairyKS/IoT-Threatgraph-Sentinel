@@ -24,6 +24,7 @@ from fastapi import APIRouter, BackgroundTasks
 from backend.contracts import AnomalyResult, GraphEnrichment, DeviceSummary
 from backend.store import (
     alert_store,
+    feed_store,
     device_registry,
     graph_store,
     build_alert_event,
@@ -58,6 +59,10 @@ async def ingest_anomaly(
 
 
 async def _process_anomaly(result: AnomalyResult) -> None:
+    await process_anomaly_result(result)
+
+
+async def process_anomaly_result(result: AnomalyResult, source: str = "pipeline") -> None:
     from datetime import datetime, timezone
 
     # 1. Update device registry
@@ -75,19 +80,21 @@ async def _process_anomaly(result: AnomalyResult) -> None:
     await device_registry.upsert(device)
     logger.info("Device registry updated: %s  risk=%.1f", result.device_id, result.scores.final_risk)
 
-    # 2. Only create an alert if above threshold
+    # 2. Build and store all feed events (all severities)
+    graph = await graph_store.get(device_id=result.device_id)
+    event = build_alert_event(result, graph)
+    event = event.model_copy(update={"reasons": [f"source:{source}", *event.reasons]})
+    await feed_store.add(event)
+
+    # 3. Keep alert semantics thresholded for /alerts and WS broadcast
     if result.scores.final_risk < ALERT_RISK_THRESHOLD:
         logger.info("Risk %.1f below threshold %.1f — no alert.", result.scores.final_risk, ALERT_RISK_THRESHOLD)
         return
 
-    # 3. Merge latest graph enrichment for this specific device (may be None on early days)
-    graph = await graph_store.get(device_id=result.device_id)
-    alert = build_alert_event(result, graph)
-
-    # 4. Store + broadcast
-    await alert_store.add(alert)
-    await manager.broadcast(alert.model_dump(mode="json"))
-    logger.info("Alert broadcast: %s  severity=%s", alert.event_id, alert.severity)
+    # 4. Store + broadcast threshold-crossing alerts
+    await alert_store.add(event)
+    await manager.broadcast(event.model_dump(mode="json"))
+    logger.info("Alert broadcast: %s  severity=%s", event.event_id, event.severity)
 
 
 # ---------------------------------------------------------------------------

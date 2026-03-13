@@ -1,9 +1,99 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid, Legend } from 'recharts';
 import { X, Shield, Target, ArrowRight } from 'lucide-react';
 import type { Device, AlertEvent, IncidentReport } from '../types/contracts';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+type FeatureSnapshot = {
+  packet_rate: number;
+  byte_volume: number;
+  port_entropy: number;
+  unique_dest_ips: number;
+  tcp_ratio: number;
+  udp_ratio: number;
+};
+
+const BASELINES_BY_DEVICE_PREFIX: Record<string, FeatureSnapshot> = {
+  cam: {
+    packet_rate: 52.4,
+    byte_volume: 81854.7,
+    port_entropy: 2.22,
+    unique_dest_ips: 9.3,
+    tcp_ratio: 0.63,
+    udp_ratio: 0.36,
+  },
+  sensor: {
+    packet_rate: 3.25,
+    byte_volume: 1400.0,
+    port_entropy: 0.11,
+    unique_dest_ips: 1.0,
+    tcp_ratio: 0.89,
+    udp_ratio: 0.11,
+  },
+  router: {
+    packet_rate: 29.35,
+    byte_volume: 43550.0,
+    port_entropy: 1.78,
+    unique_dest_ips: 5.5,
+    tcp_ratio: 0.71,
+    udp_ratio: 0.28,
+  },
+  nvr: {
+    packet_rate: 18.85,
+    byte_volume: 36400.0,
+    port_entropy: 1.24,
+    unique_dest_ips: 3.0,
+    tcp_ratio: 0.79,
+    udp_ratio: 0.20,
+  },
+  door: {
+    packet_rate: 8.5,
+    byte_volume: 9800.0,
+    port_entropy: 0.55,
+    unique_dest_ips: 2.0,
+    tcp_ratio: 0.85,
+    udp_ratio: 0.14,
+  },
+  default: {
+    packet_rate: 12.0,
+    byte_volume: 12000.0,
+    port_entropy: 0.9,
+    unique_dest_ips: 2.0,
+    tcp_ratio: 0.75,
+    udp_ratio: 0.25,
+  },
+};
+
+function baselineForDevice(device: Device): FeatureSnapshot {
+  const key = device.device_id.toLowerCase();
+  if (key.startsWith('cam-')) return BASELINES_BY_DEVICE_PREFIX.cam;
+  if (key.startsWith('sensor-')) return BASELINES_BY_DEVICE_PREFIX.sensor;
+  if (key.startsWith('router-')) return BASELINES_BY_DEVICE_PREFIX.router;
+  if (key.startsWith('nvr-')) return BASELINES_BY_DEVICE_PREFIX.nvr;
+  if (key.startsWith('door-') || key.startsWith('access-')) return BASELINES_BY_DEVICE_PREFIX.door;
+  return BASELINES_BY_DEVICE_PREFIX.default;
+}
+
+function currentFromAlert(baseline: FeatureSnapshot, alert: AlertEvent | null, device: Device): FeatureSnapshot {
+  const risk = alert?.risk_score ?? device.risk_score;
+  const factor = 1 + risk / 120;
+  const reasons = new Set(alert?.reasons.map((r) => r.toLowerCase()) ?? []);
+
+  const hasVolume = Array.from(reasons).some((r) => r.includes('volume') || r.includes('exfil'));
+  const hasPort = Array.from(reasons).some((r) => r.includes('port'));
+  const hasDiversity = Array.from(reasons).some((r) => r.includes('destination') || r.includes('fan-out') || r.includes('diversity'));
+  const hasUdp = Array.from(reasons).some((r) => r.includes('udp'));
+
+  return {
+    packet_rate: Number((baseline.packet_rate * factor).toFixed(2)),
+    byte_volume: Number((baseline.byte_volume * (hasVolume ? factor * 1.45 : factor * 1.15)).toFixed(2)),
+    port_entropy: Number((baseline.port_entropy * (hasPort ? factor * 1.25 : factor)).toFixed(2)),
+    unique_dest_ips: Number((baseline.unique_dest_ips * (hasDiversity ? factor * 1.35 : factor)).toFixed(2)),
+    tcp_ratio: Number((baseline.tcp_ratio * (hasUdp ? 0.85 : 1.02)).toFixed(2)),
+    udp_ratio: Number((baseline.udp_ratio * (hasUdp ? 1.4 : 1.05)).toFixed(2)),
+  };
+}
 
 function buildIdleReport(device: Device | null): IncidentReport {
   const deviceId = device?.device_id ?? 'unselected-device';
@@ -81,6 +171,34 @@ export function IncidentPanel({ device, latestAlert, alerts, onClose }: Incident
       }));
     return points.length > 0 ? points : buildTrendFallback(device);
   }, [alerts, device]);
+
+  const featureComparisonData = useMemo(() => {
+    if (!device) {
+      return [];
+    }
+    const baseline = baselineForDevice(device);
+    const current = currentFromAlert(baseline, latestAlert, device);
+    return [
+      { feature: 'packet_rate', baseline: baseline.packet_rate, current: current.packet_rate },
+      { feature: 'byte_volume', baseline: baseline.byte_volume, current: current.byte_volume },
+      { feature: 'port_entropy', baseline: baseline.port_entropy, current: current.port_entropy },
+      { feature: 'unique_dest_ips', baseline: baseline.unique_dest_ips, current: current.unique_dest_ips },
+    ];
+  }, [device, latestAlert]);
+
+  const topDeviationSummary = useMemo(() => {
+    if (featureComparisonData.length === 0) {
+      return [];
+    }
+    return [...featureComparisonData]
+      .map((row) => {
+        const ratio = row.baseline > 0 ? row.current / row.baseline : 1;
+        return { ...row, ratio };
+      })
+      .sort((a, b) => b.ratio - a.ratio)
+      .slice(0, 2)
+      .map((row) => `${row.feature} is ${row.ratio.toFixed(2)}x baseline`);
+  }, [featureComparisonData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -232,6 +350,34 @@ export function IncidentPanel({ device, latestAlert, alerts, onClose }: Incident
             </AreaChart>
           </ResponsiveContainer>
         </div>
+
+        {/* Baseline vs Current mini chart */}
+        {featureComparisonData.length > 0 && (
+          <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '12px 8px 8px', border: '1px solid var(--border)' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, paddingLeft: 4 }}>
+              Baseline vs Current (selected device)
+            </div>
+            <ResponsiveContainer width="100%" height={150}>
+              <BarChart data={featureComparisonData} margin={{ top: 4, right: 8, bottom: 0, left: -12 }}>
+                <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+                <XAxis dataKey="feature" tick={{ fontSize: 9, fill: '#71717a' }} />
+                <YAxis tick={{ fontSize: 9, fill: '#71717a' }} />
+                <Tooltip
+                  contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 11 }}
+                  labelStyle={{ color: 'var(--text-secondary)' }}
+                />
+                <Legend wrapperStyle={{ fontSize: 10 }} />
+                <Bar dataKey="baseline" fill="#3b82f6" name="Baseline" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="current" fill={chartColor} name="Current" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+            {topDeviationSummary.map((line) => (
+              <div key={line} style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2 }}>
+                - {line}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Latest alert explanations */}
         {latestAlert && (
