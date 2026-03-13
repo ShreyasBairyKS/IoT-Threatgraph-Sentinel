@@ -1,11 +1,13 @@
 """
-routers/alerts.py - GET /alerts endpoint.
+routers/alerts.py - Alert endpoints.
 
-Day 2+: serves from live AlertStore (populated via POST /ingest/anomaly).
-Falls back to mock data when store is empty so P4 is never blocked.
+  GET /alerts              ← all alerts, newest first
+  GET /alerts/{event_id}   ← single alert by ID (for P4 drill-down)
+
+Day 2+: serves from live AlertStore; mock fallback when store is empty.
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 from backend.contracts import AlertEvent
 from backend.store import alert_store
 from backend.mocks.mock_store import MOCK_ALERTS
@@ -22,3 +24,23 @@ async def get_alerts() -> list[AlertEvent]:
     """
     live = await alert_store.get_all()
     return live if live else MOCK_ALERTS
+
+
+@router.get("/{event_id}", response_model=AlertEvent)
+async def get_alert_by_id(event_id: str) -> AlertEvent:
+    """
+    Return a single alert by event_id — used by P4 drill-down panel.
+    Checks live store first, then falls back to mock store.
+    Returns 404 if not found in either.
+    """
+    # Check live store
+    alert = await alert_store.get_by_id(event_id)
+    if alert:
+        return alert
+
+    # Fallback: check mock store
+    mock = next((a for a in MOCK_ALERTS if a.event_id == event_id), None)
+    if mock:
+        return mock
+
+    raise HTTPException(status_code=404, detail=f"Alert '{event_id}' not found.")
