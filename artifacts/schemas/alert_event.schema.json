@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "AlertEvent",
+  "description": "Contract 4.4 - P3 → P4 over WebSocket. Frozen on Day 1.",
+  "type": "object",
+  "required": [
+    "event_type", "event_id", "timestamp", "severity",
+    "device_id", "device_type", "risk_score", "confidence",
+    "reasons", "mitre", "graph"
+  ],
+  "properties": {
+    "event_type": { "type": "string", "const": "alert.created" },
+    "event_id":   { "type": "string" },
+    "timestamp":  { "type": "string", "format": "date-time" },
+    "severity":   { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+    "device_id":  { "type": "string" },
+    "device_type":{ "type": "string" },
+    "risk_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "confidence": { "type": "string", "enum": ["low", "medium", "high"] },
+    "reasons":    { "type": "array", "items": { "type": "string" } },
+    "mitre": {
+      "type": "object",
+      "required": ["tactic", "technique"],
+      "properties": {
+        "tactic":    { "type": "string" },
+        "technique": { "type": "string" }
+      }
+    },
+    "graph": {
+      "type": "object",
+      "required": ["path", "next_targets"],
+      "properties": {
+        "path":         { "type": "array", "items": { "type": "string" } },
+        "next_targets": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

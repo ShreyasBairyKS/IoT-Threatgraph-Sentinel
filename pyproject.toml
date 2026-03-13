@@ -5,8 +5,13 @@ description = "IoT ThreatGraph Sentinel – real-time IoT threat detection and i
 requires-python = ">=3.10"
 
 [tool.pytest.ini_options]
-testpaths = ["ml/tests"]
+testpaths = ["ml/tests", "tests", "graph/tests"]
 addopts = "-v --tb=short"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
 
 [tool.ruff]
 target-version = "py310"

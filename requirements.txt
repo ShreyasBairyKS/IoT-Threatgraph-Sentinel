@@ -1,0 +1,15 @@
+# IoT ThreatGraph Sentinel - Backend (P3)
+
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+websockets>=12.0
+
+# Day 3 additions (uncomment when needed)
+# reportlab>=4.2.0        # PDF generation
+
+# Dev / testing
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
+httpx>=0.27.0,<0.28.0   # upper-bounded for system compat

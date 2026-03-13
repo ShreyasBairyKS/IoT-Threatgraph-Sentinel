@@ -1,12 +1,18 @@
-# Python virtual environments
-.venv/
-venv/
-env/
-
-# Python bytecode
+# Python
 __pycache__/
 *.py[cod]
 *.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
 
 # Pytest / test caches
 .pytest_cache/
@@ -14,11 +20,6 @@ __pycache__/
 .mypy_cache/
 .coverage
 htmlcov/
-
-# Distribution / packaging
-dist/
-build/
-*.egg-info/
 
 # Environment files (may contain secrets)
 .env
@@ -37,10 +38,15 @@ frontend/.next/
 artifacts/models/*.pkl
 artifacts/models/*.pt
 artifacts/models/*.joblib
+artifacts/models/*.h5
+
+# Logs
+*.log
 
 # OS files
 .DS_Store
 Thumbs.db
 
-# VS Code
+# IDE / Editor
 .vscode/
+.idea/
