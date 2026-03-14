@@ -19,7 +19,10 @@ from graph.settings import (
 MITRE_MAPPING = {
     "outbound_volume_spike": MitreTag(tactic="Exfiltration", technique="T1048"),
     "dest_ip_diversity_jump": MitreTag(tactic="Lateral Movement", technique="T1021"),
-    # Add more as needed based on P1's anomaly result payload reason codes.
+    "port_scan": MitreTag(tactic="Discovery", technique="T1046"),
+    "high_connection_rate": MitreTag(tactic="Impact", technique="T1498"),
+    "unusual_protocol": MitreTag(tactic="Command and Control", technique="T1071"),
+    "payload_anomaly": MitreTag(tactic="Execution", technique="T1059"),
 }
 DEFAULT_MITRE = MitreTag(tactic="Impact", technique="T1489") # Generic default
 

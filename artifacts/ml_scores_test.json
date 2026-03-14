@@ -1,0 +1,95 @@
+{
+  "items": [
+    {
+      "timestamp": "2026-03-14T02:59:30Z",
+      "device_id": "cam-001",
+      "device_type": "camera",
+      "scores": {
+        "isolation_forest": 49.16047493257333,
+        "final_risk": 49.16047493257333,
+        "confidence": "low",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [],
+      "explanations": []
+    },
+    {
+      "timestamp": "2026-03-14T02:59:32Z",
+      "device_id": "plc-09",
+      "device_type": "plc",
+      "scores": {
+        "isolation_forest": 48.51627059131642,
+        "final_risk": 48.51627059131642,
+        "confidence": "low",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [],
+      "explanations": []
+    },
+    {
+      "timestamp": "2026-03-14T02:59:32Z",
+      "device_id": "thermostat-03",
+      "device_type": "thermostat",
+      "scores": {
+        "isolation_forest": 48.26102345229949,
+        "final_risk": 48.26102345229949,
+        "confidence": "low",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [],
+      "explanations": []
+    },
+    {
+      "timestamp": "2026-03-14T02:59:32Z",
+      "device_id": "nvr-01",
+      "device_type": "nvr",
+      "scores": {
+        "isolation_forest": 48.518769063566936,
+        "final_risk": 48.518769063566936,
+        "confidence": "low",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [],
+      "explanations": []
+    },
+    {
+      "timestamp": "2026-03-14T02:59:32Z",
+      "device_id": "access-ctrl-01",
+      "device_type": "access_controller",
+      "scores": {
+        "isolation_forest": 47.99680321147571,
+        "final_risk": 47.99680321147571,
+        "confidence": "low",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [],
+      "explanations": []
+    },
+    {
+      "timestamp": "2026-03-14T02:59:32Z",
+      "device_id": "router-02",
+      "device_type": "router",
+      "scores": {
+        "isolation_forest": 48.241668631842,
+        "final_risk": 48.241668631842,
+        "confidence": "low",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [],
+      "explanations": []
+    },
+    {
+      "timestamp": "2026-03-14T02:59:32Z",
+      "device_id": "sensor-007",
+      "device_type": "sensor",
+      "scores": {
+        "isolation_forest": 48.7516931667656,
+        "final_risk": 48.7516931667656,
+        "confidence": "low",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [],
+      "explanations": []
+    }
+  ]
+}

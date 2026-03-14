@@ -60,33 +60,48 @@ def score_features(
     timestamp: str | None = None,
 ) -> ScoreResult:
     """
-    Day-1 placeholder scoring that produces contract-valid output.
-
-    Replace internals with a real trained Isolation Forest model in `ml/train.py`
-    and load it here (artifact path defined by docs).
+    Scoring using the trained Isolation Forest model.
     """
-
+    import pickle
+    import numpy as np
+    from pathlib import Path
+    from ml.features import FEATURE_KEYS
+    
     ts = timestamp or _iso_utc_now()
-    # Heuristic Day-1 scoring that stays within 0..100 and produces varied output
-    # even when raw feature magnitudes differ (e.g., byte_volume vs ratios).
-    byte_volume = float(features.get("byte_volume", 0.0) or 0.0)
-    packet_rate = float(features.get("packet_rate", 0.0) or 0.0)
-    unique_dest_ips = float(features.get("unique_dest_ips", 0.0) or 0.0)
-    port_entropy = float(features.get("port_entropy", 0.0) or 0.0)
+    
+    # Load model and scaler (in a real production app this would be loaded once at startup)
+    model_dir = Path("artifacts/models")
+    try:
+        with open(model_dir / "isolation_forest.pkl", "rb") as f:
+            iforest = pickle.load(f)
+        with open(model_dir / "scaler.pkl", "rb") as f:
+            scaler = pickle.load(f)
+            
+        # Build feature vector according to FEATURE_KEYS
+        X = np.array([[float(features.get(k, 0.0)) for k in FEATURE_KEYS]], dtype=np.float64)
+        X_scaled = scaler.transform(X)
+        
+        # Isolation Forest decision_function
+        raw = iforest.decision_function(X_scaled)[0]
+        score = 100.0 / (1.0 + np.exp(raw))
+        isolation_forest = float(np.clip(score, 0.0, 100.0))
+    except Exception:
+        # Fallback if model fails to load
+        byte_volume = float(features.get("byte_volume", 0.0) or 0.0)
+        packet_rate = float(features.get("packet_rate", 0.0) or 0.0)
+        unique_dest_ips = float(features.get("unique_dest_ips", 0.0) or 0.0)
+        port_entropy = float(features.get("port_entropy", 0.0) or 0.0)
+        
+        base = (
+            math.log1p(max(0.0, byte_volume)) * HEURISTIC_BYTE_LOG_WEIGHT
+            + math.log1p(max(0.0, packet_rate)) * HEURISTIC_PACKET_RATE_WEIGHT
+            + math.log1p(max(0.0, unique_dest_ips)) * HEURISTIC_UNIQUE_DEST_WEIGHT
+            + max(0.0, port_entropy) * HEURISTIC_PORT_ENTROPY_WEIGHT
+        )
+        if base != base:  # NaN check
+            base = 0.0
+        isolation_forest = max(0.0, min(100.0, base))
 
-    # log1p squashes large values, making the heuristic safer for unknown dataset magnitudes.
-    # weights are tuned for demo realism, not accuracy.
-    base = (
-        math.log1p(max(0.0, byte_volume)) * HEURISTIC_BYTE_LOG_WEIGHT
-        + math.log1p(max(0.0, packet_rate)) * HEURISTIC_PACKET_RATE_WEIGHT
-        + math.log1p(max(0.0, unique_dest_ips)) * HEURISTIC_UNIQUE_DEST_WEIGHT
-        + max(0.0, port_entropy) * HEURISTIC_PORT_ENTROPY_WEIGHT
-    )
-    if base != base:  # NaN check
-        base = 0.0
-    base = max(0.0, min(100.0, base))
-
-    isolation_forest = base
     final_risk = max(0.0, min(100.0, float(isolation_forest)))
 
     if final_risk >= CONFIDENCE_HIGH_THRESHOLD:

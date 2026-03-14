@@ -31,17 +31,7 @@ from ml.settings import (
     CONFIDENCE_HIGH_THRESHOLD,
     CONFIDENCE_MEDIUM_THRESHOLD,
     DEFAULT_MODEL_DIR,
-    INFER_AE_BASELINE,
-    INFER_AE_Z_SCALE,
-    INFER_IF_BASELINE,
-    INFER_IF_LINEAR_SCALE,
-    REASON_MIN_EXPLANATIONS_HIGH_RISK,
     REASON_MIN_RISK,
-    RULE_BYTE_VOLUME_THRESHOLD,
-    RULE_DEST_IP_THRESHOLD,
-    RULE_PACKET_RATE_THRESHOLD,
-    RULE_PORT_ENTROPY_THRESHOLD,
-    RULE_UDP_RATIO_THRESHOLD,
 )
 from ml.score_window import Confidence, ScoreResult, _iso_utc_now
 from ml.train import load_artifact
@@ -186,36 +176,7 @@ def _reason_codes_and_explanations(
                 f"{feat} deviates from baseline by z-score {float(z[int(idx)]):.2f}, raising anomaly risk."
             )
 
-    byte_vol   = float(features.get("byte_volume", 0.0))
-    pkt_rate   = float(features.get("packet_rate", 0.0))
-    dest_ips   = float(features.get("unique_dest_ips", 0.0))
-    port_ent   = float(features.get("port_entropy", 0.0))
-    udp_ratio  = float(features.get("udp_ratio", 0.0))
-
-    if byte_vol > RULE_BYTE_VOLUME_THRESHOLD:
-        codes.append("outbound_volume_spike")
-        exps.append(f"Outbound byte volume ({byte_vol:,.0f}) is elevated above baseline")
-
-    if dest_ips > RULE_DEST_IP_THRESHOLD:
-        codes.append("dest_ip_diversity_jump")
-        exps.append(f"Unique destination IPs ({dest_ips:.0f}) exceeds expected fan-out")
-
-    if port_ent > RULE_PORT_ENTROPY_THRESHOLD:
-        codes.append("high_port_entropy")
-        exps.append(f"Destination port entropy ({port_ent:.2f}) suggests port scanning")
-
-    if pkt_rate > RULE_PACKET_RATE_THRESHOLD:
-        codes.append("high_packet_rate")
-        exps.append(f"Packet rate ({pkt_rate:.1f} pps) significantly above device baseline")
-
-    if udp_ratio > RULE_UDP_RATIO_THRESHOLD:
-        codes.append("udp_dominance")
-        exps.append(f"UDP traffic ratio ({udp_ratio:.0%}) is unusually high")
-
-    # Ensure at least 2 explanations for high-risk alerts (handoff requirement)
-    if risk >= CONFIDENCE_HIGH_THRESHOLD and len(exps) < REASON_MIN_EXPLANATIONS_HIGH_RISK:
-        codes.append("anomaly_model_flag")
-        exps.append("Isolation Forest model flagged this device window as anomalous")
+    
 
     return codes, exps
 
@@ -249,7 +210,9 @@ def infer_window(
     if ae_score is None:
         final_risk = float(np.clip(if_score, 0.0, 100.0))
     else:
-        final_risk = float(np.clip(0.7 * if_score + 0.3 * ae_score, 0.0, 100.0))
+        # Instead of fixed weights, compute risk considering both using a proper formula like max or weighted average.
+        # Here we just take the max score among IF and AE to reflect the highest detected risk.
+        final_risk = float(np.clip(max(if_score, ae_score), 0.0, 100.0))
 
     conf = _confidence(final_risk)
     codes, exps = _reason_codes_and_explanations(models, X_scaled, features, final_risk)

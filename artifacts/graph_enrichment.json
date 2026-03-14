@@ -1,6 +1,6 @@
 [
   {
-    "timestamp": "2026-03-13T19:33:09Z",
+    "timestamp": "2026-03-14T02:04:56Z",
     "source_device": "cam-001",
     "propagation_risk": 0.457,
     "neighbors": [
@@ -76,7 +76,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T19:33:09Z",
+    "timestamp": "2026-03-14T02:04:56Z",
     "source_device": "plc-09",
     "propagation_risk": 0.347,
     "neighbors": [
@@ -147,7 +147,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T19:33:09Z",
+    "timestamp": "2026-03-14T02:04:56Z",
     "source_device": "thermostat-03",
     "propagation_risk": 0.302,
     "neighbors": [
@@ -218,7 +218,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T19:33:09Z",
+    "timestamp": "2026-03-14T02:04:56Z",
     "source_device": "nvr-01",
     "propagation_risk": 0.403,
     "neighbors": [
@@ -289,7 +289,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T19:33:09Z",
+    "timestamp": "2026-03-14T02:04:56Z",
     "source_device": "access-ctrl-01",
     "propagation_risk": 0.342,
     "neighbors": [
@@ -360,7 +360,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T19:33:09Z",
+    "timestamp": "2026-03-14T02:04:56Z",
     "source_device": "router-02",
     "propagation_risk": 0.464,
     "neighbors": [
@@ -431,7 +431,7 @@
     }
   },
   {
-    "timestamp": "2026-03-13T19:33:09Z",
+    "timestamp": "2026-03-14T02:04:56Z",
     "source_device": "sensor-007",
     "propagation_risk": 0.265,
     "neighbors": [

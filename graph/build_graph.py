@@ -16,7 +16,6 @@ def build_graph_from_flows(csv_path: str) -> nx.DiGraph:
         with open(csv_path, mode='r', encoding='utf-8') as f:
             reader = csv.DictReader(f)
             for row in reader:
-                # The exact column names depend on the dataset (CIC-IoT-2023 / N-BaIoT)
                 # Assuming generic names for now: 'src_ip', 'dst_ip'
                 
                 # In docs, device representations often use IDs like 'cam-001'.
