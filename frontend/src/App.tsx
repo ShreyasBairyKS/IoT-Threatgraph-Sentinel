@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import './index.css';
 
 import { DeviceList } from './components/DeviceList';
@@ -80,6 +80,7 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'dashboard' | 'incident'>('dashboard');
   const [wsStatus, setWsStatus] = useState<'live' | 'connecting' | 'disconnected'>('connecting');
   const [alertSnapshots, setAlertSnapshots] = useState<Record<string, AlertGraphSnapshot>>({});
+  const [metrics, setMetrics] = useState({ total_submissions: 0, alert_submissions: 0, non_alert_submissions: 0 });
 
   // Build replay frames from alerts
   const replayFrames = buildReplayFrames(alerts);
@@ -109,12 +110,23 @@ export default function App() {
         .catch(() => {});
     };
 
+    const loadMetrics = () => {
+      fetch(`${API_BASE}/metrics/summary`)
+        .then((r) => r.json())
+        .then((data: { total_submissions: number; alert_submissions: number; non_alert_submissions: number }) =>
+          setMetrics(data)
+        )
+        .catch(() => {});
+    };
+
     loadDevices();
     loadAlerts();
+    loadMetrics();
 
     const pollId = window.setInterval(() => {
       loadDevices();
       loadAlerts();
+      loadMetrics();
     }, 4000);
 
     return () => window.clearInterval(pollId);
@@ -166,6 +178,12 @@ export default function App() {
                 [evt.event_id]: buildSnapshot(evt, data, 'live snapshot'),
               }));
             })
+            .catch(() => {});
+          fetch(`${API_BASE}/metrics/summary`)
+            .then((r) => r.json())
+            .then((data: { total_submissions: number; alert_submissions: number; non_alert_submissions: number }) =>
+              setMetrics(data)
+            )
             .catch(() => {});
         } catch (_) {}
       };
@@ -241,21 +259,49 @@ export default function App() {
   const analysisEnrichment = analysisSnapshot?.enrichment
     ?? (analysisAlert ? buildEnrichmentFromAlert(analysisAlert, 'analysis') : null);
 
-  // Derive graph enrichment from live alert for the threat graph
-  const activeEnrichment: GraphEnrichment | null = liveSnapshot?.enrichment
-    ?? (liveAlert ? buildEnrichmentFromAlert(liveAlert, 'live feed') : buildLiveEnrichmentFromDevices(devices));
-  const liveGraphSourceDevices = liveSnapshot?.devices ?? devices;
-  const activeAffectedIds = activeEnrichment
-    ? new Set<string>([
-        activeEnrichment.source_device,
-        ...activeEnrichment.neighbors,
-        ...activeEnrichment.attack_paths.flat(),
-        ...activeEnrichment.next_target_prediction.map((item) => item.device_id),
-      ])
-    : null;
-  const liveGraphDevices = activeAffectedIds
-    ? liveGraphSourceDevices.filter((device) => activeAffectedIds.has(device.device_id))
-    : liveGraphSourceDevices;
+  // Derive graph enrichment from live alert for the threat graph.
+  // Each value is memoized so that polling-driven device updates (every 4 s)
+  // never produce new object references when no new alert has arrived.
+  // Without useMemo, .filter() / new Set() / buildEnrichmentFromAlert()
+  // create new references every render → ThreatGraph elements recompute →
+  // Cytoscape runs cy.layout() → visible blink even on quiet ticks.
+  const activeEnrichment = useMemo<GraphEnrichment | null>(
+    () =>
+      liveSnapshot?.enrichment ??
+      (liveAlert
+        ? buildEnrichmentFromAlert(liveAlert, 'live feed')
+        : buildLiveEnrichmentFromDevices(devices)),
+    // devices intentionally in deps so cold-start (no alert yet) still reacts
+    // to device changes; once liveSnapshot is set it short-circuits to a
+    // stable reference and downstream memos stop recomputing.
+    [liveSnapshot, liveAlert, devices],
+  );
+
+  const liveGraphSourceDevices = useMemo(
+    () => liveSnapshot?.devices ?? devices,
+    [liveSnapshot, devices],
+  );
+
+  const activeAffectedIds = useMemo<Set<string> | null>(
+    () =>
+      activeEnrichment
+        ? new Set<string>([
+            activeEnrichment.source_device,
+            ...activeEnrichment.neighbors,
+            ...activeEnrichment.attack_paths.flat(),
+            ...activeEnrichment.next_target_prediction.map((item) => item.device_id),
+          ])
+        : null,
+    [activeEnrichment],
+  );
+
+  const liveGraphDevices = useMemo(
+    () =>
+      activeAffectedIds
+        ? liveGraphSourceDevices.filter((device) => activeAffectedIds.has(device.device_id))
+        : liveGraphSourceDevices,
+    [activeAffectedIds, liveGraphSourceDevices],
+  );
 
   const selectedEnrichment: GraphEnrichment | null = selectedSnapshot?.enrichment ?? (selectedAlert
     ? buildEnrichmentFromAlert(selectedAlert, 'selected incident')
@@ -275,9 +321,9 @@ export default function App() {
     ? devices.filter((device) => affectedDeviceIds.has(device.device_id))
     : devices;
 
-  const totalSubmittedCount = devices.length;
-  const alertingCount = devices.filter((device) => device.risk_score >= 60).length;
-  const quietCount = Math.max(0, totalSubmittedCount - alertingCount);
+  const totalSubmittedCount = metrics.total_submissions || devices.length;
+  const alertingCount = metrics.alert_submissions || devices.filter((device) => device.risk_score >= 60).length;
+  const quietCount = metrics.non_alert_submissions || Math.max(0, devices.length - (metrics.alert_submissions || devices.filter((device) => device.risk_score >= 60).length));
 
   const incidentEnrichment = selectedSnapshot?.enrichment
     ?? (selectedAlert ? buildEnrichmentFromAlert(selectedAlert, 'incident page') : null);
