@@ -39,10 +39,11 @@ function riskBar(score: number, severity: string) {
 // ── Single event card ─────────────────────────────────────────────────────
 interface EventCardProps {
   event: AlertEvent;
+  selected?: boolean;
   onClick: () => void;
 }
 
-function EventCard({ event, onClick }: EventCardProps) {
+function EventCard({ event, onClick, selected = false }: EventCardProps) {
   const sev = event.severity;
   const bClass = sev === 'critical' ? 'critical' : sev === 'high' ? 'high' : sev === 'medium' ? 'medium' : 'low';
 
@@ -56,8 +57,8 @@ function EventCard({ event, onClick }: EventCardProps) {
       onClick={onClick}
       style={{
         width: '100%',
-        background: 'var(--bg-elevated)',
-        border: '1px solid var(--border)',
+        background: selected ? 'rgba(99,102,241,0.12)' : 'var(--bg-elevated)',
+        border: `1px solid ${selected ? 'rgba(129,140,248,0.55)' : 'var(--border)'}`,
         borderRadius: 'var(--radius-md)',
         padding: '10px 12px',
         textAlign: 'left',
@@ -65,7 +66,7 @@ function EventCard({ event, onClick }: EventCardProps) {
         transition: 'border-color var(--transition)',
       }}
       onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border-accent)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.borderColor = selected ? 'rgba(129,140,248,0.55)' : 'var(--border)'; }}
     >
       {riskBar(event.risk_score, sev)}
 
@@ -135,13 +136,15 @@ interface AlertFeedProps {
   /** All-severity feed events: from /feed polling */
   feedEvents: AlertEvent[];
   onAlertClick: (alert: AlertEvent) => void;
+  /** Highlight the currently selected alert */
+  selectedAlertId?: string | null;
 }
 
 type Tab = 'all' | 'alerts';
 
 const SEV_ORDER: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
 
-export function AlertFeed({ alerts, feedEvents, onAlertClick }: AlertFeedProps) {
+export function AlertFeed({ alerts, feedEvents, onAlertClick, selectedAlertId = null }: AlertFeedProps) {
   const [tab, setTab] = useState<Tab>('all');
 
   const allEvents = [...feedEvents].sort(
@@ -226,7 +229,7 @@ export function AlertFeed({ alerts, feedEvents, onAlertClick }: AlertFeedProps) 
           </div>
         )}
         {items.map((a) => (
-          <EventCard key={a.event_id + a.timestamp} event={a} onClick={() => onAlertClick(a)} />
+          <EventCard key={a.event_id + a.timestamp} event={a} selected={selectedAlertId === a.event_id} onClick={() => onAlertClick(a)} />
         ))}
       </div>
     </div>

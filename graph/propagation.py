@@ -34,6 +34,21 @@ MITRE_MAPPING = {
 }
 DEFAULT_MITRE = MITRETag(tactic="Impact", technique="T1499")  # Generic anomaly fallback
 
+_DEVICE_IMPORTANCE: dict[str, float] = {
+    "router": 1.0,
+    "nvr": 0.95,
+    "access_controller": 0.9,
+    "camera": 0.75,
+    "thermostat": 0.45,
+    "sensor": 0.35,
+    "smart_plug": 0.3,
+}
+
+
+def _importance_for_node(G: nx.DiGraph, node: str) -> float:
+    device_type = str(G.nodes[node].get("device_type", "")).strip().lower() if G.has_node(node) else ""
+    return _DEVICE_IMPORTANCE.get(device_type, 0.5)
+
 def calculate_propagation_risk(G: nx.DiGraph, anomalous_node: str, base_risk: float) -> Tuple[float, List[NextTargetPrediction]]:
     """
     Calculates propagation risk and next likely targets.
@@ -52,8 +67,9 @@ def calculate_propagation_risk(G: nx.DiGraph, anomalous_node: str, base_risk: fl
         print(f"PageRank error: {e}")
         pr = {n: 0.0 for n in G.nodes()}
 
-    # Calculate propagation risk: high if the node is highly central to the sub-graph
-    propagation_risk = min(1.0, pr.get(anomalous_node, 0.0) * base_risk * 1.5)
+    importance = _importance_for_node(G, anomalous_node)
+    # Calculate propagation risk with importance weighting.
+    propagation_risk = min(1.0, pr.get(anomalous_node, 0.0) * base_risk * (1.0 + importance))
     
     # Predict next targets based on outflowing edges and PageRank scores
     next_targets = []
@@ -63,7 +79,11 @@ def calculate_propagation_risk(G: nx.DiGraph, anomalous_node: str, base_risk: fl
         next_targets.append(NextTargetPrediction(device_id=neighbor, score=round(score, 3), why=why))
         
     next_targets.sort(key=lambda x: x.score, reverse=True)
-    return round(propagation_risk, 3), next_targets[:5] # Return top 5
+
+    # Low-importance sources generally affect fewer next targets.
+    max_targets = int(round(1 + importance * 3 + base_risk * 2))
+    max_targets = max(1, min(6, max_targets))
+    return round(propagation_risk, 3), next_targets[:max_targets]
 
 def trace_attack_paths(G: nx.DiGraph, start_node: str, depth: int = 2) -> List[List[str]]:
     """
@@ -135,7 +155,9 @@ def process_anomalies(graph_path: str, scores_path: str, output_path: str):
         
         prop_risk, targets = calculate_propagation_risk(G, anomalous_device, base_risk)
         neighbors = list(G.successors(anomalous_device)) if G.has_node(anomalous_device) else []
-        attack_paths = trace_attack_paths(G, anomalous_device, depth=2)
+        importance = _importance_for_node(G, anomalous_device)
+        depth = 1 if importance < 0.4 else 2 if importance < 0.75 else 3
+        attack_paths = trace_attack_paths(G, anomalous_device, depth=depth)
         mitre_tag = map_mitre_tags(result.reason_codes)
         
         enrichment = GraphEnrichment(

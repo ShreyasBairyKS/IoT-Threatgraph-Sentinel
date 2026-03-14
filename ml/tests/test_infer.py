@@ -46,6 +46,13 @@ def _make_dummy_models(tmp_dir: Path) -> ModelBundle:
     return ModelBundle(
         scaler=scaler,
         isolation_forest=iforest,
+        isolation_forest_meta={
+            "decision_mean": float(np.mean(iforest.decision_function(X_sc))),
+            "decision_std": float(np.std(iforest.decision_function(X_sc)) or 1.0),
+            "decision_p05": float(np.percentile(iforest.decision_function(X_sc), 5)),
+            "decision_p95": float(np.percentile(iforest.decision_function(X_sc), 95)),
+            "threshold_offset": float(getattr(iforest, "offset_", 0.0)),
+        },
         device_classifier=dt_clf,
         device_classes=classes,
         autoencoder=autoencoder,
@@ -115,6 +122,7 @@ class TestInferWindow(unittest.TestCase):
         bundle_no_clf = ModelBundle(
             scaler=self.models.scaler,
             isolation_forest=self.models.isolation_forest,
+            isolation_forest_meta=self.models.isolation_forest_meta,
             device_classifier=None,
             device_classes=[],
             autoencoder=self.models.autoencoder,
@@ -145,7 +153,7 @@ class TestConfidence(unittest.TestCase):
 class TestReasonCodes(unittest.TestCase):
     def test_high_risk_produces_explanations(self):
         codes, exps = _reason_codes_and_explanations(
-            ModelBundle(None, None, None, [], None, None),
+            ModelBundle(None, None, None, None, [], None, None),
             np.zeros((1, len(FEATURE_KEYS))),
             {"byte_volume": 90000, "packet_rate": 55, "unique_dest_ips": 10,
              "port_entropy": 2.5, "udp_ratio": 0.2}, risk=85.0
@@ -155,7 +163,7 @@ class TestReasonCodes(unittest.TestCase):
 
     def test_low_risk_no_explanations(self):
         codes, exps = _reason_codes_and_explanations(
-            ModelBundle(None, None, None, [], None, None),
+            ModelBundle(None, None, None, None, [], None, None),
             np.zeros((1, len(FEATURE_KEYS))),
             {"byte_volume": 1000, "packet_rate": 5}, risk=30.0
         )
@@ -165,7 +173,7 @@ class TestReasonCodes(unittest.TestCase):
     def test_high_risk_at_least_two_explanations(self):
         """Handoff acceptance criterion: ≥2 explanation strings for high-risk."""
         codes, exps = _reason_codes_and_explanations(
-            ModelBundle(None, None, None, [], None, None),
+            ModelBundle(None, None, None, None, [], None, None),
             np.zeros((1, len(FEATURE_KEYS))),
             {"byte_volume": 200000, "packet_rate": 100, "unique_dest_ips": 20,
              "port_entropy": 3.5, "udp_ratio": 0.1}, risk=90.0

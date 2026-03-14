@@ -69,6 +69,8 @@ async def ws_alert_endpoint(websocket: WebSocket) -> None:
     """
     await manager.connect(websocket)
     try:
+        # Send the most recent live alert immediately upon connection.
+        # Fallback to mock alert only when no live alert exists yet.
         from backend.store import alert_store
 
         live_alerts = await alert_store.get_all()

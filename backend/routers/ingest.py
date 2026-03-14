@@ -27,8 +27,10 @@ from backend.store import (
     feed_store,
     device_registry,
     graph_store,
+    alert_context_store,
     build_alert_event,
     ALERT_RISK_THRESHOLD,
+    processing_stats,
 )
 from backend.ws.broadcaster import manager
 
@@ -83,16 +85,28 @@ async def process_anomaly_result(result: AnomalyResult, source: str = "pipeline"
     # 2. Build and store all feed events (all severities)
     graph = await graph_store.get(device_id=result.device_id)
     event = build_alert_event(result, graph)
-    event = event.model_copy(update={"reasons": [f"source:{source}", *event.reasons]})
+    # Preserve explicit source tags from reason_codes (e.g., source:simulator)
+    # so frontend can distinguish manual simulations from pipeline telemetry.
+    detected_source = source
+    for code in result.reason_codes:
+        if isinstance(code, str) and code.startswith("source:"):
+            detected_source = code.split(":", 1)[1].strip() or source
+            break
+
+    event = event.model_copy(update={"reasons": [f"source:{detected_source}", *event.reasons]})
     await feed_store.add(event)
 
     # 3. Keep alert semantics thresholded for /alerts and WS broadcast
     if result.scores.final_risk < ALERT_RISK_THRESHOLD:
+        await processing_stats.record(generated_alert=False)
         logger.info("Risk %.1f below threshold %.1f — no alert.", result.scores.final_risk, ALERT_RISK_THRESHOLD)
         return
 
     # 4. Store + broadcast threshold-crossing alerts
     await alert_store.add(event)
+    await processing_stats.record(generated_alert=True)
+    devices_snapshot = await device_registry.get_all()
+    await alert_context_store.save(event.event_id, devices_snapshot, graph)
     await manager.broadcast(event.model_dump(mode="json"))
     logger.info("Alert broadcast: %s  severity=%s", event.event_id, event.severity)
 

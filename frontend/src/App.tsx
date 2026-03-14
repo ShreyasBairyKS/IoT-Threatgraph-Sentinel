@@ -1,40 +1,88 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import './index.css';
 
 import { DeviceList } from './components/DeviceList';
 import { ThreatGraph } from './components/ThreatGraph';
 import { AlertFeed } from './components/AlertFeed';
 import { IncidentPanel } from './components/IncidentPanel';
+import { IncidentAnalysisModal } from './components/IncidentAnalysisModal';
+import { IncidentDetailPage } from './components/IncidentDetailPage';
 import { ReplayTimeline } from './components/ReplayTimeline';
 import { SimulateThreatPanel } from './components/SimulateThreatPanel';
 import { buildReplayFrames } from './components/replayUtils';
 
-import { MockWebSocket } from './mocks/mockWebSocket';
-import {
-  MOCK_DEVICES,
-  MOCK_ALERTS,
-  MOCK_GRAPH_ENRICHMENT,
-} from './mocks/mockData';
-
-import type { AlertEvent, Device } from './types/contracts';
-import type { GraphEnrichment } from './types/contracts';
+import type { AlertEvent, Device, GraphEnrichment } from './types/contracts';
 import { Activity, Wifi, FlaskConical } from 'lucide-react';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000/ws/alerts';
-const MOCKS_ENABLED = import.meta.env.VITE_ENABLE_MOCK_FALLBACK === 'true';
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined)
+  ?? `${window.location.protocol}//${window.location.hostname}:8000`;
+const WS_URL = (import.meta.env.VITE_WS_URL as string | undefined)
+  ?? `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.hostname}:8000/ws/alerts`;
+
+interface AlertGraphSnapshot {
+  devices: Device[];
+  enrichment: GraphEnrichment;
+}
+
+function buildEnrichmentFromAlert(alert: AlertEvent, why: string): GraphEnrichment {
+  return {
+    timestamp: alert.timestamp,
+    source_device: alert.device_id,
+    propagation_risk: alert.risk_score / 100,
+    neighbors: alert.graph.next_targets,
+    next_target_prediction: alert.graph.next_targets.map((id) => ({ device_id: id, score: 0.82, why })),
+    attack_paths: [alert.graph.path],
+    mitre: alert.mitre,
+  };
+}
+
+function buildSnapshot(alert: AlertEvent, sourceDevices: Device[], why: string): AlertGraphSnapshot {
+  return {
+    devices: sourceDevices.map((device) => ({ ...device })),
+    enrichment: buildEnrichmentFromAlert(alert, why),
+  };
+}
+
+function buildLiveEnrichmentFromDevices(devices: Device[]): GraphEnrichment | null {
+  if (devices.length === 0) return null;
+  const sorted = [...devices].sort((a, b) => b.risk_score - a.risk_score);
+  const source = sorted[0];
+  const neighbors = sorted.slice(1, 4).map((d) => d.device_id);
+  return {
+    timestamp: new Date().toISOString(),
+    source_device: source.device_id,
+    propagation_risk: Math.max(0, Math.min(1, source.risk_score / 100)),
+    neighbors,
+    next_target_prediction: neighbors.map((id, index) => ({
+      device_id: id,
+      score: Number((0.8 - index * 0.1).toFixed(2)),
+      why: 'backend device risk ordering',
+    })),
+    attack_paths: neighbors.length > 0 ? [
+      [source.device_id, neighbors[0]],
+    ] : [[source.device_id]],
+    mitre: {
+      tactic: 'Unknown',
+      technique: 'T0000',
+    },
+  };
+}
 
 // ── App ────────────────────────────────────────────────────────────────────
 export default function App() {
   // State
   const [alerts, setAlerts] = useState<AlertEvent[]>([]);
-  const [feedEvents, setFeedEvents] = useState<AlertEvent[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
-  const [graphEnrichment, setGraphEnrichment] = useState<GraphEnrichment | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
-  const [latestAlert, setLatestAlert] = useState<AlertEvent | null>(null);
+  const [liveAlert, setLiveAlert] = useState<AlertEvent | null>(null);
+  const [selectedAlert, setSelectedAlert] = useState<AlertEvent | null>(null);
   const [replayIndex, setReplayIndex] = useState(0);
-  const [wsStatus, setWsStatus] = useState<'live' | 'mock' | 'offline'>('offline');
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'dashboard' | 'incident'>('dashboard');
+  const [wsStatus, setWsStatus] = useState<'live' | 'connecting' | 'disconnected'>('connecting');
+  const [alertSnapshots, setAlertSnapshots] = useState<Record<string, AlertGraphSnapshot>>({});
+
+  const [feedEvents, setFeedEvents] = useState<AlertEvent[]>([]);
   const [showSimulator, setShowSimulator] = useState(false);
   const [compromiseToast, setCompromiseToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -42,235 +90,169 @@ export default function App() {
   // Build replay frames from alerts
   const replayFrames = buildReplayFrames(alerts);
 
-  // Keep refs to avoid stale closures in WS listeners.
-  const devicesRef = useRef<Device[]>([]);
+  // Live WebSocket
+  const wsRef = useRef<WebSocket | null>(null);
+
+  // Fetch initial alerts + devices from API
   useEffect(() => {
-    devicesRef.current = devices;
-  }, [devices]);
-
-  const refreshGraph = useCallback(async () => {
-    try {
-      const graphRes = await fetch(`${API_BASE_URL}/graph`);
-      if (!graphRes.ok) {
-        return;
-      }
-      const liveGraph = await graphRes.json() as GraphEnrichment;
-      setGraphEnrichment(liveGraph ?? null);
-    } catch {
-      // Keep existing graph state when refresh fails.
-    }
-  }, []);
-
-  const refreshFeed = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/feed?limit=300`);
-      if (res.ok) {
-        const data = await res.json() as AlertEvent[];
-        setFeedEvents(data);
-      }
-    } catch {
-      // keep existing feed state on transient failure
-    }
-  }, []);
-
-  const fetchInitialData = useCallback(async () => {
-    try {
-      const [devicesRes, alertsRes, graphRes, feedRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/devices`),
-        fetch(`${API_BASE_URL}/alerts`),
-        fetch(`${API_BASE_URL}/graph`),
-        fetch(`${API_BASE_URL}/feed?limit=300`),
-      ]);
-
-      if (!devicesRes.ok || !alertsRes.ok || !graphRes.ok) {
-        throw new Error('One or more backend endpoints returned a non-200 response.');
-      }
-
-      const [liveDevices, liveAlerts, liveGraph] = await Promise.all([
-        devicesRes.json() as Promise<Device[]>,
-        alertsRes.json() as Promise<AlertEvent[]>,
-        graphRes.json() as Promise<GraphEnrichment>,
-      ]);
-
-      setDevices(liveDevices);
-      setAlerts(liveAlerts);
-      setGraphEnrichment(liveGraph ?? null);
-      setLatestAlert(liveAlerts[0] ?? null);
-
-      if (feedRes.ok) {
-        const liveFeed = await feedRes.json() as AlertEvent[];
-        setFeedEvents(liveFeed);
-      }
-    } catch {
-      if (MOCKS_ENABLED) {
-        setDevices(MOCK_DEVICES);
-        setAlerts(MOCK_ALERTS);
-        setFeedEvents(MOCK_ALERTS);
-        setGraphEnrichment(MOCK_GRAPH_ENRICHMENT);
-        setLatestAlert(MOCK_ALERTS[0] ?? null);
-        setWsStatus('mock');
-      } else {
-        setDevices([]);
-        setAlerts([]);
-        setFeedEvents([]);
-        setGraphEnrichment(null);
-        setLatestAlert(null);
-        setWsStatus('offline');
-      }
-    }
-  }, []);
-
-  // WebSocket reference (real or mock fallback)
-  const wsRef = useRef<MockWebSocket | null>(null);
-  const liveWsRef = useRef<WebSocket | null>(null);
-
-  useEffect(() => {
-    let fallbackWs: MockWebSocket | null = null;
-
-    const applyIncomingAlert = (evt: AlertEvent) => {
-      setAlerts((prev) => {
-        if (prev.some((a) => a.event_id === evt.event_id && a.timestamp === evt.timestamp)) {
-          return prev;
-        }
-        return [evt, ...prev].slice(0, 50);
-      });
-      setLatestAlert(evt);
-
-      // Optimistically reflect graph details included in the live alert,
-      // then reconcile with backend /graph for the latest enrichment snapshot.
-      setGraphEnrichment({
-        timestamp: evt.timestamp,
-        source_device: evt.device_id,
-        propagation_risk: Math.max(0, Math.min(1, evt.risk_score / 100)),
-        neighbors: evt.graph.next_targets,
-        next_target_prediction: evt.graph.next_targets.map((id) => ({
-          device_id: id,
-          score: 0.5,
-          why: 'derived from alert event',
-        })),
-        attack_paths: [evt.graph.path],
-        mitre: evt.mitre,
-      });
-      void refreshGraph();
-
-      if (evt.severity === 'high' || evt.severity === 'critical') {
-        const message = `${evt.device_id} device has been compromised via ${evt.mitre.tactic} (${evt.mitre.technique}).`;
-        setCompromiseToast(message);
-        if (toastTimerRef.current !== null) {
-          window.clearTimeout(toastTimerRef.current);
-        }
-        toastTimerRef.current = window.setTimeout(() => {
-          setCompromiseToast(null);
-          toastTimerRef.current = null;
-        }, 4800);
-      }
-
-      setDevices((prev) => {
-        const idx = prev.findIndex((d) => d.device_id === evt.device_id);
-        if (idx === -1) {
-          return prev;
-        }
-        const next = [...prev];
-        next[idx] = {
-          ...next[idx],
-          risk_score: evt.risk_score,
-          confidence: evt.confidence,
-          last_seen: evt.timestamp,
-          status:
-            evt.severity === 'critical' ? 'critical' : evt.severity === 'high' ? 'suspicious' : 'normal',
-        };
-        return next;
-      });
+    const loadDevices = () => {
+      fetch(`${API_BASE}/devices`)
+        .then((r) => r.json())
+        .then((data: Device[]) => setDevices(data))
+        .catch(() => {});
     };
 
-    const startMockFallback = () => {
-      if (!MOCKS_ENABLED) {
-        setWsStatus('offline');
-        return;
-      }
-      setWsStatus('mock');
-      fallbackWs = new MockWebSocket();
-      wsRef.current = fallbackWs;
-      fallbackWs.onAlert(applyIncomingAlert);
-      fallbackWs.connect(5000);
-    };
-
-    fetchInitialData();
-
-    try {
-      const liveWs = new WebSocket(WS_URL);
-      liveWsRef.current = liveWs;
-
-      liveWs.onopen = () => {
-        setWsStatus('live');
-      };
-
-      liveWs.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data) as AlertEvent;
-          if (parsed.event_type === 'alert.created') {
-            applyIncomingAlert(parsed);
+    const loadAlerts = () => {
+      fetch(`${API_BASE}/alerts`)
+        .then((r) => r.json())
+        .then((data: AlertEvent[]) => {
+          const recentAlerts = data.slice(0, 100);
+          setAlerts(recentAlerts);
+          if (recentAlerts.length > 0) {
+            setLiveAlert((prev) => prev ?? recentAlerts[0]);
           }
-        } catch {
-          // Ignore malformed event payloads.
-        }
-      };
+        })
+        .catch(() => {});
+    };
 
-      liveWs.onerror = () => {
-        if (wsRef.current == null) {
-          startMockFallback();
-        }
-      };
+    const loadFeed = () => {
+      fetch(`${API_BASE}/feed?limit=300`)
+        .then((r) => r.json())
+        .then((data: AlertEvent[]) => setFeedEvents(data))
+        .catch(() => {});
+    };
 
-      liveWs.onclose = () => {
-        if (wsRef.current == null) {
-          startMockFallback();
-        }
-      };
-    } catch {
-      startMockFallback();
-    }
+    loadDevices();
+    loadAlerts();
+    loadFeed();
 
-    // Poll /feed every 10 s so all-severity events stay fresh
-    const feedInterval = window.setInterval(() => { void refreshFeed(); }, 10_000);
+    const pollId = window.setInterval(() => {
+      loadDevices();
+      loadAlerts();
+      loadFeed();
+    }, 4000);
 
     return () => {
-      window.clearInterval(feedInterval);
-      if (liveWsRef.current) {
-        liveWsRef.current.close();
-        liveWsRef.current = null;
-      }
-      if (fallbackWs) {
-        fallbackWs.disconnect();
-        wsRef.current = null;
-      }
+      window.clearInterval(pollId);
       if (toastTimerRef.current !== null) {
         window.clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
       }
     };
-  }, [fetchInitialData, refreshGraph, refreshFeed]);
+  }, []);
+
+  const historicalSnapshots = useMemo(() => {
+    const snapshots: Record<string, AlertGraphSnapshot> = {};
+    for (const alert of alerts) {
+      snapshots[alert.event_id] = buildSnapshot(alert, devices, 'historical snapshot');
+    }
+    return snapshots;
+  }, [alerts, devices]);
+
+  const combinedSnapshots = useMemo(
+    () => ({ ...historicalSnapshots, ...alertSnapshots }),
+    [historicalSnapshots, alertSnapshots],
+  );
+
+  // Real WebSocket connection
+  useEffect(() => {
+    function connect() {
+      const ws = new WebSocket(WS_URL);
+      wsRef.current = ws;
+
+      ws.onopen = () => setWsStatus('live');
+      ws.onclose = () => {
+        setWsStatus('disconnected');
+        // Reconnect after 3s
+        setTimeout(connect, 3000);
+      };
+      ws.onerror = () => ws.close();
+
+      ws.onmessage = (event) => {
+        try {
+          const evt: AlertEvent = JSON.parse(event.data);
+          setAlerts((prev) => {
+            if (prev.some((a) => a.event_id === evt.event_id)) return prev;
+            return [evt, ...prev].slice(0, 100);
+          });
+          setFeedEvents((prev) => {
+            if (prev.some((a) => a.event_id === evt.event_id && a.timestamp === evt.timestamp)) return prev;
+            return [evt, ...prev].slice(0, 300);
+          });
+          setLiveAlert(evt);
+          if (evt.severity === 'high' || evt.severity === 'critical') {
+            setCompromiseToast(`${evt.device_id} compromised via ${evt.mitre.tactic} (${evt.mitre.technique}).`);
+            if (toastTimerRef.current !== null) {
+              window.clearTimeout(toastTimerRef.current);
+            }
+            toastTimerRef.current = window.setTimeout(() => {
+              setCompromiseToast(null);
+              toastTimerRef.current = null;
+            }, 4800);
+          }
+          // Refresh devices list to pick up risk score changes
+          fetch(`${API_BASE}/devices`)
+            .then((r) => r.json())
+            .then((data: Device[]) => {
+              setDevices(data);
+              setAlertSnapshots((prev) => ({
+                ...prev,
+                [evt.event_id]: buildSnapshot(evt, data, 'live snapshot'),
+              }));
+            })
+            .catch(() => {});
+        } catch {
+          // Ignore malformed WS payloads.
+        }
+      };
+    }
+
+    connect();
+    return () => {
+      wsRef.current?.close();
+    };
+  }, []);
 
   // Node click from graph → open IncidentPanel
   const handleNodeClick = useCallback((deviceId: string) => {
-    const device = devicesRef.current.find((d) => d.device_id === deviceId) ?? null;
+    const device = devices.find((d) => d.device_id === deviceId) ?? null;
     setSelectedDevice(device);
     const deviceAlert = alerts.find((a) => a.device_id === deviceId) ?? null;
-    if (deviceAlert) setLatestAlert(deviceAlert);
-  }, [alerts]);
+    setSelectedAlert(deviceAlert);
+  }, [alerts, devices]);
 
   // Alert click → open IncidentPanel for that device
   const handleAlertClick = useCallback((alert: AlertEvent) => {
-    const device = devicesRef.current.find((d) => d.device_id === alert.device_id) ?? null;
+    const device = devices.find((d) => d.device_id === alert.device_id) ?? null;
     setSelectedDevice(device);
-    setLatestAlert(alert);
-  }, []);
+    setSelectedAlert(alert);
+    setViewMode('incident');
+
+    fetch(`${API_BASE}/alerts/${alert.event_id}/context`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('No saved context');
+        }
+        return response.json();
+      })
+      .then((context) => {
+        if (!context?.devices || !context?.enrichment) return;
+        setAlertSnapshots((prev) => ({
+          ...prev,
+          [alert.event_id]: {
+            devices: context.devices,
+            enrichment: context.enrichment,
+          },
+        }));
+      })
+      .catch(() => {});
+  }, [devices]);
 
   // Device click from list → open IncidentPanel
   const handleDeviceSelect = useCallback((device: Device) => {
     setSelectedDevice(device);
     const deviceAlert = alerts.find((a) => a.device_id === device.device_id) ?? null;
-    if (deviceAlert) setLatestAlert(deviceAlert);
+    setSelectedAlert(deviceAlert);
   }, [alerts]);
 
   // Replay-index change → highlight the alert at that frame
@@ -280,14 +262,112 @@ export default function App() {
     if (!frame) return;
     const correspondingAlert = alerts.find((a) => a.device_id === frame.label) ?? null;
     if (correspondingAlert) {
-      setLatestAlert(correspondingAlert);
-      const device = devicesRef.current.find((d) => d.device_id === frame.label) ?? null;
+      setSelectedAlert(correspondingAlert);
+      const device = devices.find((d) => d.device_id === frame.label) ?? null;
       setSelectedDevice(device);
     }
-  }, [replayFrames, alerts]);
+  }, [replayFrames, alerts, devices]);
 
-  // Determine graph enrichment for current replay frame
-  const activeEnrichment = graphEnrichment;
+  const liveSnapshot = liveAlert ? combinedSnapshots[liveAlert.event_id] : null;
+  const selectedSnapshot = selectedAlert ? combinedSnapshots[selectedAlert.event_id] : null;
+  const analysisAlert = selectedAlert ?? liveAlert;
+  const analysisSnapshot = selectedAlert
+    ? selectedSnapshot
+    : liveSnapshot;
+  const analysisEnrichment = analysisSnapshot?.enrichment
+    ?? (analysisAlert ? buildEnrichmentFromAlert(analysisAlert, 'analysis') : null);
+
+  // Derive graph enrichment from live alert for the threat graph
+  const activeEnrichment: GraphEnrichment | null = liveSnapshot?.enrichment
+    ?? (liveAlert ? buildEnrichmentFromAlert(liveAlert, 'live feed') : buildLiveEnrichmentFromDevices(devices));
+  const liveGraphSourceDevices = liveSnapshot?.devices ?? devices;
+  const activeAffectedIds = activeEnrichment
+    ? new Set<string>([
+        activeEnrichment.source_device,
+        ...activeEnrichment.neighbors,
+        ...activeEnrichment.attack_paths.flat(),
+        ...activeEnrichment.next_target_prediction.map((item) => item.device_id),
+      ])
+    : null;
+  const liveGraphDevices = activeAffectedIds
+    ? liveGraphSourceDevices.filter((device) => activeAffectedIds.has(device.device_id))
+    : liveGraphSourceDevices;
+
+  const selectedEnrichment: GraphEnrichment | null = selectedSnapshot?.enrichment ?? (selectedAlert
+    ? buildEnrichmentFromAlert(selectedAlert, 'selected incident')
+    : null);
+  const selectedGraphDevices = selectedSnapshot?.devices ?? devices;
+
+  const alertContextEnrichment = selectedEnrichment ?? activeEnrichment;
+  const affectedDeviceIds = alertContextEnrichment
+    ? new Set<string>([
+        alertContextEnrichment.source_device,
+        ...alertContextEnrichment.neighbors,
+        ...alertContextEnrichment.attack_paths.flat(),
+        ...alertContextEnrichment.next_target_prediction.map((item) => item.device_id),
+      ])
+    : null;
+  const visibleDevices = affectedDeviceIds
+    ? devices.filter((device) => affectedDeviceIds.has(device.device_id))
+    : devices;
+
+  const totalSubmittedCount = devices.length;
+  const alertingCount = devices.filter((device) => device.risk_score >= 60).length;
+  const quietCount = Math.max(0, totalSubmittedCount - alertingCount);
+
+  const incidentEnrichment = selectedSnapshot?.enrichment
+    ?? (selectedAlert ? buildEnrichmentFromAlert(selectedAlert, 'incident page') : null);
+
+  if (viewMode === 'incident' && selectedAlert && incidentEnrichment) {
+    return (
+      <>
+        <IncidentDetailPage
+          alert={selectedAlert}
+          devices={selectedSnapshot?.devices ?? devices}
+          enrichment={incidentEnrichment}
+          onBack={() => setViewMode('dashboard')}
+          onSelectDevice={handleNodeClick}
+        />
+
+        <button
+          className="btn btn-ghost"
+          type="button"
+          style={{
+            position: 'fixed',
+            right: 14,
+            bottom: 14,
+            zIndex: 80,
+            boxShadow: '0 8px 20px rgba(0,0,0,0.3)',
+          }}
+          onClick={() => setShowSimulator((prev) => !prev)}
+          aria-label="Toggle threat simulator"
+        >
+          <FlaskConical size={12} />
+          {showSimulator ? 'Hide Simulator' : 'Simulate Threat'}
+        </button>
+
+        <SimulateThreatPanel
+          open={showSimulator}
+          devices={devices}
+          apiBaseUrl={API_BASE}
+          onGraphInjected={(enrichment) => {
+            const key = `sim-${Date.now()}`;
+            setAlertSnapshots((prev) => ({
+              ...prev,
+              [key]: { devices: devices.map((device) => ({ ...device })), enrichment },
+            }));
+          }}
+          onClose={() => setShowSimulator(false)}
+        />
+
+        {compromiseToast && (
+          <div className="compromise-toast" role="status" aria-live="polite">
+            {compromiseToast}
+          </div>
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -299,23 +379,42 @@ export default function App() {
         </div>
 
         <div className="top-bar-meta">
-          <button
-            className="btn btn-ghost"
-            type="button"
-            onClick={() => setShowSimulator((prev) => !prev)}
-            aria-label="Toggle threat simulator"
-          >
-            <FlaskConical size={12} />
-            {showSimulator ? 'Hide Simulator' : 'Simulate Threat'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            {analysisAlert && (
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 12, whiteSpace: 'nowrap' }}
+                onClick={() => setAnalysisOpen(true)}
+              >
+                Analyze Incident
+              </button>
+            )}
+            <button
+              className="btn btn-ghost"
+              type="button"
+              style={{
+                fontSize: 12,
+                borderColor: 'rgba(249,115,22,0.45)',
+                color: 'var(--risk-high)',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+              onClick={() => setShowSimulator((prev) => !prev)}
+              aria-label="Toggle threat simulator"
+              title="Open attack simulation panel"
+            >
+              <FlaskConical size={12} />
+              {showSimulator ? 'Hide Simulator' : 'Simulate Threat'}
+            </button>
+          </div>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <Activity size={12} />
             {alerts.length} alerts
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <Wifi size={12} style={{ color: 'var(--risk-low)' }} />
-            <span style={{ color: 'var(--risk-low)' }}>
-              {wsStatus === 'live' ? 'Live WS' : wsStatus === 'mock' ? 'Mock WS' : 'WS offline'}
+            <Wifi size={12} style={{ color: wsStatus === 'live' ? 'var(--risk-low)' : wsStatus === 'connecting' ? 'var(--risk-medium)' : 'var(--risk-critical)' }} />
+            <span style={{ color: wsStatus === 'live' ? 'var(--risk-low)' : wsStatus === 'connecting' ? 'var(--risk-medium)' : 'var(--risk-critical)' }}>
+              {wsStatus === 'live' ? 'Live' : wsStatus === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
             </span>
           </span>
           <span className="mono" style={{ fontSize: 11 }}>
@@ -326,36 +425,158 @@ export default function App() {
 
       {/* ── Three-panel main content ─────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', flex: 1 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+            gap: 10,
+            padding: '10px 12px 0',
+          }}
+        >
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Data Submitted</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{totalSubmittedCount}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Tracked devices / data sources received</div>
+          </div>
+
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(249,115,22,0.28)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Generating Alerts</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--risk-high)' }}>{alertingCount}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Devices currently in active or elevated state</div>
+          </div>
+
+          <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(34,197,94,0.24)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>No Alerts</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--risk-normal)' }}>{quietCount}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Devices submitting data without active alerts</div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px 0' }}>
+          <button
+            className="btn btn-primary"
+            type="button"
+            onClick={() => setShowSimulator((prev) => !prev)}
+            aria-label="Open threat simulator"
+            title="Open threat simulator"
+          >
+            <FlaskConical size={12} />
+            {showSimulator ? 'Hide Simulator' : 'Simulate Threat'}
+          </button>
+          {analysisAlert && (
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => setAnalysisOpen(true)}
+            >
+              Analyze Incident
+            </button>
+          )}
+        </div>
+
         <div className="main-content" style={{ flex: 1 }}>
           {/* Left: Device List */}
           <DeviceList
-            devices={devices}
+            devices={visibleDevices}
             selectedId={selectedDevice?.device_id ?? null}
             onSelect={handleDeviceSelect}
+            affectedOnly={Boolean(affectedDeviceIds)}
           />
 
-          {/* Center: Threat Graph */}
-          <ThreatGraph
-            devices={devices}
-            enrichment={activeEnrichment}
-            onNodeClick={handleNodeClick}
-          />
+          <div
+            className="graph-stack"
+            style={{
+              gridTemplateRows: selectedEnrichment
+                ? 'minmax(280px, 1fr) minmax(220px, 0.85fr)'
+                : 'minmax(320px, 1fr)',
+            }}
+          >
+            {activeEnrichment ? (
+              <div style={{ position: 'relative', minHeight: 0, height: '100%' }}>
+                <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 30 }}>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => setShowSimulator(true)}
+                    aria-label="Open threat simulator"
+                    title="Inject threat and visualize spread on graph"
+                  >
+                    <FlaskConical size={12} />
+                    Simulate Threat
+                  </button>
+                </div>
+                <ThreatGraph
+                  devices={liveGraphDevices}
+                  enrichment={activeEnrichment}
+                  onNodeClick={handleNodeClick}
+                  title="Live Threat Graph"
+                  subtitle="always-on real-time topology"
+                  mode="live"
+                  highlightedDeviceId={liveAlert?.device_id ?? null}
+                />
+              </div>
+            ) : (
+              <div style={{ position: 'relative', minHeight: 0, height: '100%' }}>
+                <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 30 }}>
+                  <button
+                    className="btn btn-primary"
+                    type="button"
+                    onClick={() => setShowSimulator(true)}
+                    aria-label="Open threat simulator"
+                    title="Inject threat and visualize spread on graph"
+                  >
+                    <FlaskConical size={12} />
+                    Simulate Threat
+                  </button>
+                </div>
+                <div className="panel" style={{ alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
+                  <div className="card-header" style={{ width: '100%' }}>Live Threat Graph</div>
+                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    Waiting for backend telemetry…
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Right: Incident Panel (drill-down) or Alert Feed toggle */}
-          {selectedDevice ? (
-            <IncidentPanel
-              device={selectedDevice}
-              latestAlert={latestAlert}
-              alerts={alerts}
-              onClose={() => setSelectedDevice(null)}
-            />
-          ) : (
+            {selectedEnrichment && (
+              <ThreatGraph
+                devices={selectedGraphDevices}
+                enrichment={selectedEnrichment}
+                onNodeClick={handleNodeClick}
+                title="Selected Incident Graph"
+                subtitle={selectedAlert ? `${selectedAlert.device_id} · ${selectedAlert.event_id}` : 'focused incident view'}
+                mode="focus"
+                highlightedDeviceId={selectedAlert?.device_id ?? null}
+              />
+            )}
+          </div>
+
+          <div
+            className="right-stack"
+            style={{
+              gridTemplateRows: selectedDevice
+                ? 'minmax(260px, 1fr) minmax(300px, 1fr)'
+                : 'minmax(320px, 1fr) minmax(220px, 0.75fr)',
+            }}
+          >
             <AlertFeed
               alerts={alerts}
               feedEvents={feedEvents}
               onAlertClick={handleAlertClick}
+              selectedAlertId={selectedAlert?.event_id ?? null}
             />
-          )}
+
+            <IncidentPanel
+              device={selectedDevice}
+              selectedAlert={selectedAlert}
+              liveAlert={liveAlert}
+              alerts={alerts}
+              onClose={() => {
+                setSelectedDevice(null);
+                setSelectedAlert(null);
+              }}
+            />
+          </div>
         </div>
 
         {/* ── Bottom: Replay Timeline ───────────────────────────────── */}
@@ -366,15 +587,24 @@ export default function App() {
         />
       </div>
 
+      <IncidentAnalysisModal
+        open={analysisOpen}
+        alert={analysisAlert}
+        devices={analysisSnapshot?.devices ?? devices}
+        enrichment={analysisEnrichment}
+        onClose={() => setAnalysisOpen(false)}
+      />
+
       <SimulateThreatPanel
         open={showSimulator}
         devices={devices}
-        apiBaseUrl={API_BASE_URL}
+        apiBaseUrl={API_BASE}
         onGraphInjected={(enrichment) => {
-          setGraphEnrichment(enrichment);
-          void refreshGraph();
-          // Refresh feed shortly after so manual simulation shows in All Feed
-          window.setTimeout(() => { void refreshFeed(); }, 600);
+          const key = `sim-${Date.now()}`;
+          setAlertSnapshots((prev) => ({
+            ...prev,
+            [key]: { devices: devices.map((device) => ({ ...device })), enrichment },
+          }));
         }}
         onClose={() => setShowSimulator(false)}
       />

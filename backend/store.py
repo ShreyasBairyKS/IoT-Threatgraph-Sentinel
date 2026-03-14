@@ -140,6 +140,56 @@ class GraphStore:
             return self._latest
 
 
+class AlertContextStore:
+    """Stores per-alert graph + device snapshot context for later drill-down."""
+
+    def __init__(self) -> None:
+        self._contexts: dict[str, dict[str, object]] = {}
+        self._lock = asyncio.Lock()
+
+    async def save(
+        self,
+        event_id: str,
+        devices: list[DeviceSummary],
+        enrichment: Optional[GraphEnrichment],
+    ) -> None:
+        async with self._lock:
+            self._contexts[event_id] = {
+                "devices": devices,
+                "enrichment": enrichment,
+            }
+
+    async def get(self, event_id: str) -> Optional[dict[str, object]]:
+        async with self._lock:
+            return self._contexts.get(event_id)
+
+
+class ProcessingStats:
+    """Tracks how many telemetry items were processed and how many raised alerts."""
+
+    def __init__(self) -> None:
+        self._total_submissions = 0
+        self._alert_submissions = 0
+        self._non_alert_submissions = 0
+        self._lock = asyncio.Lock()
+
+    async def record(self, generated_alert: bool) -> None:
+        async with self._lock:
+            self._total_submissions += 1
+            if generated_alert:
+                self._alert_submissions += 1
+            else:
+                self._non_alert_submissions += 1
+
+    async def snapshot(self) -> dict[str, int]:
+        async with self._lock:
+            return {
+                "total_submissions": self._total_submissions,
+                "alert_submissions": self._alert_submissions,
+                "non_alert_submissions": self._non_alert_submissions,
+            }
+
+
 # ---------------------------------------------------------------------------
 # Merge helper: AnomalyResult + GraphEnrichment → AlertEvent
 # ---------------------------------------------------------------------------
@@ -178,3 +228,5 @@ alert_store = AlertStore()
 feed_store = FeedStore()
 device_registry = DeviceRegistry()
 graph_store = GraphStore()
+processing_stats = ProcessingStats()
+alert_context_store = AlertContextStore()

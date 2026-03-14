@@ -1,209 +1,97 @@
 {
   "items": [
     {
-      "timestamp": "2026-03-13T10:50:00Z",
+      "timestamp": "2026-03-13T11:14:20Z",
       "device_id": "cam-001",
       "device_type": "camera",
       "scores": {
-        "isolation_forest": 51.15953920631977,
-        "final_risk": 47.85736597284486,
-        "confidence": "low",
-        "autoencoder": 40.15229509473674
+        "isolation_forest": 100.0,
+        "final_risk": 100.0,
+        "confidence": "high"
+      },
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
+    },
+    {
+      "timestamp": "2026-03-13T11:14:20Z",
+      "device_id": "sensor-07",
+      "device_type": "sensor",
+      "scores": {
+        "isolation_forest": 64.50953237069605,
+        "final_risk": 64.50953237069605,
+        "confidence": "medium"
       },
       "reason_codes": [],
       "explanations": []
     },
     {
-      "timestamp": "2026-03-13T10:40:00Z",
-      "device_id": "cam-002",
-      "device_type": "camera",
-      "scores": {
-        "isolation_forest": 53.082042704744374,
-        "final_risk": 67.15742989332105,
-        "confidence": "medium",
-        "autoencoder": 100.0
-      },
-      "reason_codes": [
-        "feature_deviation_byte_volume",
-        "feature_deviation_port_entropy",
-        "feature_deviation_packet_rate",
-        "outbound_volume_spike",
-        "high_port_entropy",
-        "high_packet_rate"
-      ],
-      "explanations": [
-        "byte_volume deviates from baseline by z-score 3.32, raising anomaly risk.",
-        "port_entropy deviates from baseline by z-score 3.20, raising anomaly risk.",
-        "packet_rate deviates from baseline by z-score 2.39, raising anomaly risk.",
-        "Outbound byte volume (23,312,166) is elevated above baseline",
-        "Destination port entropy (3.57) suggests port scanning",
-        "Packet rate (100.5 pps) significantly above device baseline"
-      ]
-    },
-    {
-      "timestamp": "2026-03-13T11:00:00Z",
-      "device_id": "cam-003",
-      "device_type": "camera",
-      "scores": {
-        "isolation_forest": 50.76897533175731,
-        "final_risk": 48.11680661716428,
-        "confidence": "low",
-        "autoencoder": 41.928412949780544
-      },
-      "reason_codes": [],
-      "explanations": []
-    },
-    {
-      "timestamp": "2026-03-13T10:57:00Z",
-      "device_id": "door-ctrl-01",
-      "device_type": "door_controller",
-      "scores": {
-        "isolation_forest": 52.28480589798793,
-        "final_risk": 61.4924745003928,
-        "confidence": "medium",
-        "autoencoder": 82.97703457267085
-      },
-      "reason_codes": [
-        "feature_deviation_port_entropy",
-        "feature_deviation_packet_rate",
-        "feature_deviation_byte_volume",
-        "outbound_volume_spike",
-        "high_port_entropy",
-        "high_packet_rate"
-      ],
-      "explanations": [
-        "port_entropy deviates from baseline by z-score 1.75, raising anomaly risk.",
-        "packet_rate deviates from baseline by z-score 1.60, raising anomaly risk.",
-        "byte_volume deviates from baseline by z-score 0.58, raising anomaly risk.",
-        "Outbound byte volume (6,159,448) is elevated above baseline",
-        "Destination port entropy (2.16) suggests port scanning",
-        "Packet rate (75.5 pps) significantly above device baseline"
-      ]
-    },
-    {
-      "timestamp": "2026-03-13T10:16:00Z",
-      "device_id": "door-ctrl-02",
-      "device_type": "door_controller",
-      "scores": {
-        "isolation_forest": 46.94237260964019,
-        "final_risk": 45.023257189236965,
-        "confidence": "low",
-        "autoencoder": 40.5453212082961
-      },
-      "reason_codes": [],
-      "explanations": []
-    },
-    {
-      "timestamp": "2026-03-13T10:53:00Z",
-      "device_id": "nvr-01",
-      "device_type": "nvr",
-      "scores": {
-        "isolation_forest": 50.98496563983774,
-        "final_risk": 65.68947594788642,
-        "confidence": "medium",
-        "autoencoder": 100.0
-      },
-      "reason_codes": [
-        "feature_deviation_flow_duration_mean",
-        "feature_deviation_tcp_ratio",
-        "feature_deviation_udp_ratio",
-        "outbound_volume_spike"
-      ],
-      "explanations": [
-        "flow_duration_mean deviates from baseline by z-score 2.25, raising anomaly risk.",
-        "tcp_ratio deviates from baseline by z-score 0.74, raising anomaly risk.",
-        "udp_ratio deviates from baseline by z-score 0.74, raising anomaly risk.",
-        "Outbound byte volume (1,477,778) is elevated above baseline"
-      ]
-    },
-    {
-      "timestamp": "2026-03-13T10:49:00Z",
-      "device_id": "router-01",
-      "device_type": "router",
-      "scores": {
-        "isolation_forest": 51.75435195958989,
-        "final_risk": 66.22804637171292,
-        "confidence": "medium",
-        "autoencoder": 100.0
-      },
-      "reason_codes": [
-        "feature_deviation_packet_rate",
-        "feature_deviation_port_entropy",
-        "feature_deviation_byte_volume",
-        "outbound_volume_spike",
-        "high_port_entropy",
-        "high_packet_rate"
-      ],
-      "explanations": [
-        "packet_rate deviates from baseline by z-score 2.41, raising anomaly risk.",
-        "port_entropy deviates from baseline by z-score 2.38, raising anomaly risk.",
-        "byte_volume deviates from baseline by z-score 1.09, raising anomaly risk.",
-        "Outbound byte volume (9,361,262) is elevated above baseline",
-        "Destination port entropy (2.78) suggests port scanning",
-        "Packet rate (101.1 pps) significantly above device baseline"
-      ]
-    },
-    {
-      "timestamp": "2026-03-13T10:47:00Z",
+      "timestamp": "2026-03-13T11:14:20Z",
       "device_id": "router-02",
       "device_type": "router",
       "scores": {
-        "isolation_forest": 51.23081965883887,
-        "final_risk": 58.38124518595447,
-        "confidence": "medium",
-        "autoencoder": 75.06557141589089
+        "isolation_forest": 100.0,
+        "final_risk": 100.0,
+        "confidence": "high"
       },
-      "reason_codes": [],
-      "explanations": []
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
     },
     {
-      "timestamp": "2026-03-13T10:37:00Z",
-      "device_id": "sensor-01",
-      "device_type": "sensor",
+      "timestamp": "2026-03-13T11:14:20Z",
+      "device_id": "nvr-01",
+      "device_type": "nvr",
       "scores": {
-        "isolation_forest": 47.300954591747384,
-        "final_risk": 45.27432438464214,
-        "confidence": "low",
-        "autoencoder": 40.54552056806326
+        "isolation_forest": 100.0,
+        "final_risk": 100.0,
+        "confidence": "high"
       },
-      "reason_codes": [],
-      "explanations": []
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
     },
     {
-      "timestamp": "2026-03-13T10:52:00Z",
-      "device_id": "sensor-02",
-      "device_type": "sensor",
+      "timestamp": "2026-03-13T11:14:20Z",
+      "device_id": "access-ctrl-01",
+      "device_type": "access_controller",
       "scores": {
-        "isolation_forest": 47.22485405045326,
-        "final_risk": 45.294886091446244,
-        "confidence": "low",
-        "autoencoder": 40.79162752042988
+        "isolation_forest": 91.12191760215343,
+        "final_risk": 91.12191760215343,
+        "confidence": "high"
       },
-      "reason_codes": [],
-      "explanations": []
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
     },
     {
-      "timestamp": "2026-03-13T10:49:00Z",
-      "device_id": "sensor-03",
-      "device_type": "sensor",
+      "timestamp": "2026-03-13T11:14:20Z",
+      "device_id": "src_ip",
+      "device_type": "dst_ip",
       "scores": {
-        "isolation_forest": 46.77113970160862,
-        "final_risk": 44.797216609169055,
-        "confidence": "low",
-        "autoencoder": 40.19139606014343
-      },
-      "reason_codes": [],
-      "explanations": []
-    },
-    {
-      "timestamp": "2026-03-13T10:34:00Z",
-      "device_id": "storage-01",
-      "device_type": "storage_server",
-      "scores": {
-        "isolation_forest": 49.2916975595649,
-        "final_risk": 48.142396269555185,
-        "confidence": "low",
-        "autoencoder": 45.46069325953253
+        "isolation_forest": 0.0,
+        "final_risk": 0.0,
+        "confidence": "low"
       },
       "reason_codes": [],
       "explanations": []

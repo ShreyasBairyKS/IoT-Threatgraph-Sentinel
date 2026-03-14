@@ -1,432 +1,74 @@
 [
   {
-    "timestamp": "2026-03-13T10:50:00Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "cam-001",
-    "propagation_risk": 0.108,
-    "neighbors": [
-      "nvr-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "nvr-01",
-        "score": 0.459,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "cam-001",
-        "nvr-01"
-      ]
-    ],
-    "mitre": {
-      "tactic": "Impact",
-      "technique": "T1499"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T10:40:00Z",
-    "source_device": "cam-002",
-    "propagation_risk": 0.237,
-    "neighbors": [
-      "nvr-01",
-      "external-unknown",
-      "door-ctrl-01",
-      "router-02",
-      "storage-01",
-      "door-ctrl-02",
-      "router-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "nvr-01",
-        "score": 0.257,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "storage-01",
-        "score": 0.252,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "router-01",
-        "score": 0.065,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "external-unknown",
-        "score": 0.055,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "door-ctrl-02",
-        "score": 0.033,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "cam-002",
-        "nvr-01"
-      ],
-      [
-        "cam-002",
-        "external-unknown"
-      ],
-      [
-        "cam-002",
-        "door-ctrl-01"
-      ],
-      [
-        "cam-002",
-        "router-02"
-      ],
-      [
-        "cam-002",
-        "storage-01"
-      ],
-      [
-        "cam-002",
-        "door-ctrl-02"
-      ],
-      [
-        "cam-002",
-        "router-01"
-      ]
-    ],
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
     "mitre": {
       "tactic": "Exfiltration",
       "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T11:00:00Z",
-    "source_device": "cam-003",
-    "propagation_risk": 0.108,
-    "neighbors": [
-      "nvr-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "nvr-01",
-        "score": 0.459,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "cam-003",
-        "nvr-01"
-      ]
-    ],
+    "timestamp": "2026-03-13T11:14:20Z",
+    "source_device": "sensor-07",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
     "mitre": {
       "tactic": "Impact",
-      "technique": "T1499"
+      "technique": "T1489"
     }
   },
   {
-    "timestamp": "2026-03-13T10:57:00Z",
-    "source_device": "door-ctrl-01",
-    "propagation_risk": 0.271,
-    "neighbors": [
-      "router-01",
-      "storage-01",
-      "router-02",
-      "external-unknown",
-      "door-ctrl-02"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "storage-01",
-        "score": 0.181,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "router-01",
-        "score": 0.155,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "external-unknown",
-        "score": 0.075,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "door-ctrl-02",
-        "score": 0.035,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "router-02",
-        "score": 0.017,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "door-ctrl-01",
-        "router-01"
-      ],
-      [
-        "door-ctrl-01",
-        "storage-01"
-      ],
-      [
-        "door-ctrl-01",
-        "router-02"
-      ],
-      [
-        "door-ctrl-01",
-        "external-unknown"
-      ],
-      [
-        "door-ctrl-01",
-        "door-ctrl-02"
-      ]
-    ],
-    "mitre": {
-      "tactic": "Discovery",
-      "technique": "T1046"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T10:16:00Z",
-    "source_device": "door-ctrl-02",
-    "propagation_risk": 0.175,
-    "neighbors": [
-      "router-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "router-01",
-        "score": 0.233,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "door-ctrl-02",
-        "router-01"
-      ]
-    ],
-    "mitre": {
-      "tactic": "Impact",
-      "technique": "T1499"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T10:53:00Z",
-    "source_device": "nvr-01",
-    "propagation_risk": 0.533,
-    "neighbors": [
-      "storage-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "storage-01",
-        "score": 0.459,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "nvr-01",
-        "storage-01"
-      ]
-    ],
-    "mitre": {
-      "tactic": "Exfiltration",
-      "technique": "T1048"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T10:49:00Z",
-    "source_device": "router-01",
-    "propagation_risk": 0.301,
-    "neighbors": [
-      "internet-benign",
-      "door-ctrl-02",
-      "storage-01",
-      "door-ctrl-01",
-      "nvr-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "storage-01",
-        "score": 0.249,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "nvr-01",
-        "score": 0.247,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "internet-benign",
-        "score": 0.112,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "door-ctrl-02",
-        "score": 0.039,
-        "why": "high flow volume"
-      },
-      {
-        "device_id": "door-ctrl-01",
-        "score": 0.038,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "router-01",
-        "internet-benign"
-      ],
-      [
-        "router-01",
-        "door-ctrl-02"
-      ],
-      [
-        "router-01",
-        "storage-01"
-      ],
-      [
-        "router-01",
-        "door-ctrl-01"
-      ],
-      [
-        "router-01",
-        "nvr-01"
-      ]
-    ],
-    "mitre": {
-      "tactic": "Command and Control",
-      "technique": "T1071"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T10:47:00Z",
+    "timestamp": "2026-03-13T11:14:20Z",
     "source_device": "router-02",
-    "propagation_risk": 0.473,
-    "neighbors": [
-      "internet-benign"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "internet-benign",
-        "score": 0.459,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "router-02",
-        "internet-benign"
-      ]
-    ],
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
     "mitre": {
-      "tactic": "Impact",
-      "technique": "T1499"
+      "tactic": "Exfiltration",
+      "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T10:37:00Z",
-    "source_device": "sensor-01",
-    "propagation_risk": 0.264,
-    "neighbors": [
-      "router-02"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "router-02",
-        "score": 0.33,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "sensor-01",
-        "router-02"
-      ]
-    ],
+    "timestamp": "2026-03-13T11:14:20Z",
+    "source_device": "nvr-01",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
     "mitre": {
-      "tactic": "Impact",
-      "technique": "T1499"
+      "tactic": "Exfiltration",
+      "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T10:52:00Z",
-    "source_device": "sensor-02",
-    "propagation_risk": 0.264,
-    "neighbors": [
-      "router-02"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "router-02",
-        "score": 0.33,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "sensor-02",
-        "router-02"
-      ]
-    ],
+    "timestamp": "2026-03-13T11:14:20Z",
+    "source_device": "access-ctrl-01",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
     "mitre": {
-      "tactic": "Impact",
-      "technique": "T1499"
+      "tactic": "Exfiltration",
+      "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T10:49:00Z",
-    "source_device": "sensor-03",
-    "propagation_risk": 0.261,
-    "neighbors": [
-      "router-02"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "router-02",
-        "score": 0.33,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "sensor-03",
-        "router-02"
-      ]
-    ],
+    "timestamp": "2026-03-13T11:14:20Z",
+    "source_device": "src_ip",
+    "propagation_risk": 0.0,
+    "neighbors": [],
+    "next_target_prediction": [],
+    "attack_paths": [],
     "mitre": {
       "tactic": "Impact",
-      "technique": "T1499"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T10:34:00Z",
-    "source_device": "storage-01",
-    "propagation_risk": 0.39,
-    "neighbors": [
-      "nvr-01"
-    ],
-    "next_target_prediction": [
-      {
-        "device_id": "nvr-01",
-        "score": 0.459,
-        "why": "high flow volume"
-      }
-    ],
-    "attack_paths": [
-      [
-        "storage-01",
-        "nvr-01"
-      ]
-    ],
-    "mitre": {
-      "tactic": "Impact",
-      "technique": "T1499"
+      "technique": "T1489"
     }
   }
 ]

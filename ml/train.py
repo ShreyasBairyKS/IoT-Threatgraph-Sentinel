@@ -30,6 +30,12 @@ class SupportsTransform(Protocol):
 class SupportsPredict(Protocol):
     def predict(self, X: np.ndarray) -> np.ndarray: ...
 
+
+class SupportsDecisionFunction(Protocol):
+    offset_: float
+
+    def decision_function(self, X: np.ndarray) -> np.ndarray: ...
+
 # ---------------------------------------------------------------------------
 # Vector helpers
 # ---------------------------------------------------------------------------
@@ -61,7 +67,12 @@ def windows_to_matrix(windows: list[dict]) -> tuple[np.ndarray, list[str], list[
 # Isolation Forest training
 # ---------------------------------------------------------------------------
 
-def train_isolation_forest(X: np.ndarray, random_state: int = 42) -> object:
+def train_isolation_forest(
+    X: np.ndarray,
+    random_state: int = 42,
+    n_estimators: int = 200,
+    contamination: float = 0.15,
+) -> SupportsDecisionFunction:
     """
     Fit an IsolationForest on feature matrix X.
 
@@ -71,8 +82,8 @@ def train_isolation_forest(X: np.ndarray, random_state: int = 42) -> object:
     from sklearn.ensemble import IsolationForest  # type: ignore[import]
 
     clf = IsolationForest(
-        n_estimators=200,
-        contamination='auto',
+        n_estimators=n_estimators,
+        contamination=contamination,
         random_state=random_state,
         n_jobs=-1,
     )
@@ -80,7 +91,26 @@ def train_isolation_forest(X: np.ndarray, random_state: int = 42) -> object:
     return clf
 
 
-def isolation_forest_score(clf: object, X: np.ndarray) -> np.ndarray:
+def build_isolation_forest_meta(clf: SupportsDecisionFunction, X: np.ndarray) -> dict[str, float]:
+    """
+    Build calibration metadata from IsolationForest decision scores.
+
+    The model threshold is represented by ``offset_``; scores below that are
+    more anomalous. Persisting these stats avoids hardcoded scaling in inference.
+    """
+    raw = np.asarray(clf.decision_function(X), dtype=np.float64)
+    mean = float(np.mean(raw)) if len(raw) else 0.0
+    std = float(np.std(raw)) if len(raw) else 1.0
+    return {
+        "decision_mean": mean,
+        "decision_std": std if std > 1e-9 else 1.0,
+        "decision_p05": float(np.percentile(raw, 5)) if len(raw) else -1.0,
+        "decision_p95": float(np.percentile(raw, 95)) if len(raw) else 1.0,
+        "threshold_offset": float(getattr(clf, "offset_", 0.0)),
+    }
+
+
+def isolation_forest_score(clf: SupportsDecisionFunction, X: np.ndarray) -> np.ndarray:
     """
     Return anomaly scores in [0, 100] (higher = more anomalous).
 
@@ -107,6 +137,7 @@ def train_device_classifier(
     X: np.ndarray,
     device_types: list[str],
     random_state: int = 42,
+    n_estimators: int = 200,
 ) -> tuple[object, list[str]]:
     """
     Fit a RandomForestClassifier to predict device type labels.
@@ -129,7 +160,7 @@ def train_device_classifier(
     y = le.fit_transform(y_raw)
 
     clf = RandomForestClassifier(
-        n_estimators=200,
+        n_estimators=n_estimators,
         random_state=random_state,
         n_jobs=-1,
     )
@@ -149,7 +180,7 @@ def fit_scaler(X: np.ndarray) -> SupportsTransform:
     return scaler
 
 
-def train_autoencoder(X: np.ndarray, random_state: int = 42) -> SupportsPredict:
+def train_autoencoder(X: np.ndarray, random_state: int = 42, max_iter: int = 500) -> SupportsPredict:
     """
     Train a lightweight MLP autoencoder surrogate (X -> X reconstruction).
 
@@ -161,7 +192,7 @@ def train_autoencoder(X: np.ndarray, random_state: int = 42) -> SupportsPredict:
         hidden_layer_sizes=(16, 8, 16),
         activation="relu",
         solver="adam",
-        max_iter=500,
+        max_iter=max_iter,
         random_state=random_state,
     )
     ae.fit(X, X)
@@ -210,6 +241,10 @@ def main() -> None:
     ap.add_argument("--input",     required=True, help="Input CSV file path.")
     ap.add_argument("--model-dir", default="artifacts/models", help="Directory to save model artifacts.")
     ap.add_argument("--random-state", type=int, default=42)
+    ap.add_argument("--iforest-contamination", type=float, default=0.15)
+    ap.add_argument("--iforest-estimators", type=int, default=200)
+    ap.add_argument("--classifier-estimators", type=int, default=200)
+    ap.add_argument("--autoencoder-max-iter", type=int, default=500)
     ap.add_argument(
         "--disable-autoencoder",
         action="store_true",
@@ -244,12 +279,22 @@ def main() -> None:
     save_artifact(scaler, model_dir / "scaler.pkl")
 
     print("Training Isolation Forest...")
-    if_clf = train_isolation_forest(X_scaled, random_state=args.random_state)
+    if_clf = train_isolation_forest(
+        X_scaled,
+        random_state=args.random_state,
+        n_estimators=args.iforest_estimators,
+        contamination=args.iforest_contamination,
+    )
     save_artifact(if_clf, model_dir / "isolation_forest.pkl")
+    save_artifact(build_isolation_forest_meta(if_clf, X_scaled), model_dir / "isolation_forest_meta.pkl")
 
     if not args.disable_autoencoder:
         print("Training optional autoencoder drift model...")
-        ae = train_autoencoder(X_scaled, random_state=args.random_state)
+        ae = train_autoencoder(
+            X_scaled,
+            random_state=args.random_state,
+            max_iter=args.autoencoder_max_iter,
+        )
         ae_errors = autoencoder_error(ae, X_scaled)
         ae_meta = build_autoencoder_meta(ae_errors)
         save_artifact(ae, model_dir / "autoencoder.pkl")
@@ -261,7 +306,12 @@ def main() -> None:
         print("Skipping autoencoder training (--disable-autoencoder).")
 
     print("Training device type classifier...")
-    dt_clf, classes = train_device_classifier(X_scaled, device_types, random_state=args.random_state)
+    dt_clf, classes = train_device_classifier(
+        X_scaled,
+        device_types,
+        random_state=args.random_state,
+        n_estimators=args.classifier_estimators,
+    )
     save_artifact(dt_clf, model_dir / "device_classifier.pkl")
     save_artifact(classes, model_dir / "device_classes.pkl")
 

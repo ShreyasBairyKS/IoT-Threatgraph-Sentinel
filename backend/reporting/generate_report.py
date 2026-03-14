@@ -118,62 +118,112 @@ def build_report(alert: AlertEvent) -> IncidentReport:
     )
 
 
+# Playbooks keyed by MITRE tactic
+_TACTIC_PLAYBOOKS: dict[str, list[str]] = {
+    "Lateral Movement": [
+        "Apply micro-segmentation rules to block east-west traffic between IoT zones.",
+        "Rotate SSH/API credentials on all devices in the attack path.",
+        "Review and tighten firewall ACLs for lateral inter-device communication.",
+    ],
+    "Exfiltration": [
+        "Enable DPI on egress interface to detect tunnelled data exfiltration.",
+        "Apply egress bandwidth caps and alert on sustained high-volume outbound flows.",
+        "Verify and revoke any unauthorised API keys or outbound OAuth tokens.",
+    ],
+    "Impact": [
+        "Take a forensic snapshot of the device state before performing remediation.",
+        "Restore device configuration from a known-good backup immediately.",
+        "Audit all actuator commands issued in the last 24 hours for tampering.",
+    ],
+    "Discovery": [
+        "Enable network scanning detection and rate-limit ARP/ICMP on the segment.",
+        "Disable SNMP public community strings across the IoT subnet.",
+        "Review mDNS and UPnP exposure on the affected network segment.",
+    ],
+    "Command and Control": [
+        "Block all outbound connections from the device to non-allowlisted IPs.",
+        "Deploy DNS sinkholing for C2 domains identified in threat intelligence feeds.",
+        "Analyse process memory on the device for injected shellcode or beacons.",
+    ],
+}
+
+_DEVICE_TYPE_RECS: dict[str, str] = {
+    "camera": "Disable RTSP public streaming and rotate camera authentication credentials.",
+    "router": "Re-flash router firmware and audit port-forwarding / NAT rules immediately.",
+    "sensor": "Verify sensor calibration data integrity — spoofed readings may mask the breach.",
+    "nvr": "Preserve all NVR recordings as forensic evidence before any remediation step.",
+    "access_control": "Revoke all issued access tokens and trigger a full badge-audit for the affected zone.",
+    "thermostat": "Reset HVAC controller to manual mode and inspect last 48 h of setpoint commands.",
+}
+
+_REASON_RECS: dict[str, str] = {
+    "outbound_volume_spike": "Throttle outbound bandwidth and set an alert threshold at 2× 7-day baseline.",
+    "dest_ip_diversity_jump": "Block all newly seen destination IPs and submit them to your threat intel platform.",
+    "traffic_baseline_shift": "Capture a new 24 h baseline only after the incident is fully contained.",
+    "port_entropy_high": "Inspect for port-scanning activity and apply protocol whitelisting on the device.",
+    "iat_anomaly": "Co-relate inter-arrival time spikes with scheduled tasks or cron jobs on the device.",
+}
+
+
 def _generate_recommendations(alert: AlertEvent) -> list[str]:
     """
-    Produce prioritised, actionable recommendations from the alert.
-
-    Combines:
-      1. Immediate containment actions (risk-score-gated)
-      2. MITRE ATT&CK tactic-specific mitigations
-      3. Graph propagation path hardening
+    Context-sensitive, per-alert recommendations.
+    Varies by severity, MITRE tactic, device type, and surfaced reason codes.
     """
     recs: list[str] = []
 
-    # -- Immediate containment (high / critical alerts) ----------------------
+    # 1. Severity-gated immediate action
     if alert.risk_score >= 85:
         recs.append(
-            f"IMMEDIATE: Isolate {alert.device_id} into a quarantine VLAN "
-            "and disable all non-management network access."
+            f"CRITICAL: Immediately isolate {alert.device_id} into a quarantine VLAN "
+            f"and page the on-call security engineer."
         )
-    elif alert.risk_score >= 65:
+    elif alert.risk_score >= 70:
         recs.append(
-            f"Restrict {alert.device_id} to its home subnet and block all "
-            "inter-segment traffic until the root cause is confirmed."
+            f"HIGH: Move {alert.device_id} to a restricted network segment within 15 minutes "
+            f"and begin incident triage."
         )
     else:
         recs.append(
-            f"Flag {alert.device_id} for increased monitoring. Confirm whether "
-            "the anomaly represents a genuine threat before isolating."
+            f"Block outbound connections from {alert.device_id} to unknown external endpoints "
+            f"pending investigation."
         )
 
-    # -- Block outbound C2 / exfil traffic -----------------------------------
-    recs.append(
-        f"Block all outbound connections from {alert.device_id} to unrecognised "
-        "external endpoints at the perimeter firewall."
-    )
+    # 2. MITRE-tactic playbook (3 entries, pick first 2 to keep report concise)
+    tactic_key = alert.mitre.tactic
+    for tactic_rec in _TACTIC_PLAYBOOKS.get(tactic_key, [
+        "Review device logs and correlate with SIEM for additional indicators.",
+        "Update threat intelligence feeds and re-scan the affected subnet.",
+    ])[:2]:
+        recs.append(tactic_rec)
 
-    # -- MITRE tactic-specific mitigations -----------------------------------
-    tactic_mitigations = _MITRE_MITIGATIONS.get(alert.mitre.tactic, _DEFAULT_MITIGATIONS)
-    recs.extend(tactic_mitigations)
+    # 3. Device-type specific recommendation
+    dtype_rec = _DEVICE_TYPE_RECS.get(alert.device_type)
+    if dtype_rec:
+        recs.append(dtype_rec)
 
-    # -- Graph propagation awareness -----------------------------------------
+    # 4. Reason-code driven recommendations (up to 2)
+    for code in alert.reasons[:2]:
+        # match on any known code key substring
+        for key, rec in _REASON_RECS.items():
+            if key in code.lower().replace(" ", "_") and rec not in recs:
+                recs.append(rec)
+                break
+
+    # 5. Propagation path hardening
+    if len(alert.graph.path) > 1:
+        recs.append(
+            f"Harden the attack path {' → '.join(alert.graph.path)}: "
+            f"apply inter-zone firewall rules between each hop."
+        )
+
+    # 6. Next-target monitoring
     if alert.graph.next_targets:
         targets = ", ".join(alert.graph.next_targets)
         recs.append(
-            f"Place elevated monitoring on likely next-hop targets: {targets}."
+            f"Place {targets} under enhanced monitoring — ML model predicts them as "
+            f"next propagation targets (technique {alert.mitre.technique})."
         )
-
-    if len(alert.graph.path) > 1:
-        path_str = " → ".join(alert.graph.path)
-        recs.append(
-            f"Run firmware integrity verification on all devices in the attack path: {path_str}."
-        )
-
-    # -- Forensics and logging -----------------------------------------------
-    recs.append(
-        "Preserve full packet capture and device logs before any remediation to "
-        "support post-incident forensic analysis."
-    )
 
     return recs
 
