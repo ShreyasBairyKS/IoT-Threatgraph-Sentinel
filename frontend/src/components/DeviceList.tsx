@@ -3,20 +3,17 @@ import { Monitor, Wifi, Server, Camera, Thermometer, Shield } from 'lucide-react
 import type { Device } from '../types/contracts';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-function getRiskClass(score: number): string {
-  if (score >= 80) return 'critical';
-  if (score >= 60) return 'high';
-  if (score >= 40) return 'medium';
-  if (score >= 20) return 'low';
+function getRiskClass(device: Device): string {
+  if (device.status === 'critical') return 'critical';
+  if (device.status === 'suspicious') return 'high';
+  if (device.confidence === 'medium') return 'medium';
+  if (device.confidence === 'low' && device.status !== 'normal') return 'low';
   return 'normal';
 }
 
-function getRiskColor(score: number): string {
-  if (score >= 80) return 'var(--risk-critical)';
-  if (score >= 60) return 'var(--risk-high)';
-  if (score >= 40) return 'var(--risk-medium)';
-  if (score >= 20) return 'var(--risk-low)';
-  return 'var(--risk-normal)';
+function getRiskColor(device: Device): string {
+  const cls = getRiskClass(device);
+  return `var(--risk-${cls})`;
 }
 
 const DEVICE_ICON: Record<string, React.ReactNode> = {
@@ -36,8 +33,8 @@ interface DeviceRowProps {
 }
 
 function DeviceRow({ device, selected, onClick }: DeviceRowProps) {
-  const riskClass = getRiskClass(device.risk_score);
-  const riskColor = getRiskColor(device.risk_score);
+  const riskClass = getRiskClass(device);
+  const riskColor = getRiskColor(device);
 
   return (
     <button
@@ -93,10 +90,10 @@ interface DeviceListProps {
 
 export function DeviceList({ devices, selectedId, onSelect }: DeviceListProps) {
   const alertingDevices = [...devices]
-    .filter((device) => device.risk_score >= 60)
+    .filter((device) => device.status !== 'normal')
     .sort((a, b) => b.risk_score - a.risk_score);
   const quietDevices = [...devices]
-    .filter((device) => device.risk_score < 60)
+    .filter((device) => device.status === 'normal')
     .sort((a, b) => a.risk_score - b.risk_score);
 
   return (

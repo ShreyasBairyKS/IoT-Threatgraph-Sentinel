@@ -5,6 +5,16 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+from ml.settings import (
+    CONFIDENCE_HIGH_THRESHOLD,
+    CONFIDENCE_MEDIUM_THRESHOLD,
+    HEURISTIC_BYTE_LOG_WEIGHT,
+    HEURISTIC_PACKET_RATE_WEIGHT,
+    HEURISTIC_PORT_ENTROPY_WEIGHT,
+    HEURISTIC_UNIQUE_DEST_WEIGHT,
+    REASON_MIN_RISK,
+)
+
 Confidence = Literal["low", "medium", "high"]
 
 
@@ -25,9 +35,8 @@ class ScoreResult:
             "isolation_forest": float(self.isolation_forest),
             "final_risk": float(self.final_risk),
             "confidence": self.confidence,
+            "autoencoder": float(self.autoencoder) if self.autoencoder is not None else 0.0,
         }
-        if self.autoencoder is not None:
-            scores["autoencoder"] = float(self.autoencoder)
 
         return {
             "timestamp": self.timestamp,
@@ -65,12 +74,13 @@ def score_features(
     unique_dest_ips = float(features.get("unique_dest_ips", 0.0) or 0.0)
     port_entropy = float(features.get("port_entropy", 0.0) or 0.0)
 
-    # log1p squashes large byte volumes; weights are tuned for demo realism, not accuracy.
+    # log1p squashes large values, making the heuristic safer for unknown dataset magnitudes.
+    # weights are tuned for demo realism, not accuracy.
     base = (
-        math.log1p(max(0.0, byte_volume)) * 8.0
-        + max(0.0, packet_rate) * 0.6
-        + max(0.0, unique_dest_ips) * 3.5
-        + max(0.0, port_entropy) * 10.0
+        math.log1p(max(0.0, byte_volume)) * HEURISTIC_BYTE_LOG_WEIGHT
+        + math.log1p(max(0.0, packet_rate)) * HEURISTIC_PACKET_RATE_WEIGHT
+        + math.log1p(max(0.0, unique_dest_ips)) * HEURISTIC_UNIQUE_DEST_WEIGHT
+        + max(0.0, port_entropy) * HEURISTIC_PORT_ENTROPY_WEIGHT
     )
     if base != base:  # NaN check
         base = 0.0
@@ -79,16 +89,16 @@ def score_features(
     isolation_forest = base
     final_risk = max(0.0, min(100.0, float(isolation_forest)))
 
-    if final_risk >= 80:
+    if final_risk >= CONFIDENCE_HIGH_THRESHOLD:
         confidence: Confidence = "high"
-    elif final_risk >= 50:
+    elif final_risk >= CONFIDENCE_MEDIUM_THRESHOLD:
         confidence = "medium"
     else:
         confidence = "low"
 
     reason_codes: list[str] = []
     explanations: list[str] = []
-    if final_risk >= 70:
+    if final_risk >= REASON_MIN_RISK:
         reason_codes = ["outbound_volume_spike", "dest_ip_diversity_jump"]
         explanations = [
             "Outbound traffic is above rolling baseline",

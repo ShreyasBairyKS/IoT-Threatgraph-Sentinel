@@ -37,15 +37,15 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Risk threshold: anomaly results at or above this become AlertEvents
 # ---------------------------------------------------------------------------
-ALERT_RISK_THRESHOLD = 60.0
+ALERT_RISK_THRESHOLD = settings.ALERT_RISK_THRESHOLD
 
 # Severity bands
 def _risk_to_severity(score: float) -> str:
-    if score >= 85:
+    if score >= settings.SEVERITY_CRITICAL_THRESHOLD:
         return "critical"
-    if score >= 70:
+    if score >= settings.SEVERITY_HIGH_THRESHOLD:
         return "high"
-    if score >= 50:
+    if score >= settings.SEVERITY_MEDIUM_THRESHOLD:
         return "medium"
     return "low"
 

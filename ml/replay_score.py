@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import urllib.request
 from pathlib import Path
 
 from ml.score_window import score_features
@@ -25,6 +26,7 @@ def main() -> None:
     ap.add_argument("--input", required=True, help="CSV with at least device_id and numeric columns.")
     ap.add_argument("--output", required=True, help="Output JSON file path (anomaly result items).")
     ap.add_argument("--device-type", default="unknown", help="Fallback device_type if not in input.")
+    ap.add_argument("--api-url", default=None, help="Backend API URL to post results (e.g. http://localhost:8000/ingest/anomaly)")
     args = ap.parse_args()
 
     in_path = Path(args.input)
@@ -68,7 +70,21 @@ def main() -> None:
 
         features = {k: (sums[k] / counts[k]) for k in sums if counts.get(k, 0) > 0}
         result = score_features(device_id=device_id, device_type=device_type, features=features)
-        items.append(result.to_contract_payload())
+        payload = result.to_contract_payload()
+        items.append(payload)
+
+        # Real connection: push data to the backend API if --api-url is configured
+        if args.api_url:
+            try:
+                req = urllib.request.Request(
+                    args.api_url, 
+                    data=json.dumps(payload).encode("utf-8"), 
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req)
+                print(f"Posted {device_id} real anomaly score to backend")
+            except Exception as e:
+                print(f"Warning: Failed to fallback/post to backend API: {e}")
 
     out = {"items": items}
     out_path.write_text(json.dumps(out, indent=2), encoding="utf-8")

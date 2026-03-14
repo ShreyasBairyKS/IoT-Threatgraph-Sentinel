@@ -1,71 +1,501 @@
 [
   {
-    "timestamp": "2026-03-13T11:14:20Z",
+    "timestamp": "2026-03-13T19:33:09Z",
     "source_device": "cam-001",
-    "propagation_risk": 0.0,
-    "neighbors": [],
-    "next_target_prediction": [],
-    "attack_paths": [],
+    "propagation_risk": 0.457,
+    "neighbors": [
+      "router-01",
+      "access-ctrl-01",
+      "cam-001",
+      "nvr-01",
+      "sensor-007",
+      "thermostat-03",
+      "plc-09",
+      "router-02"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "cam-001",
+        "score": 0.304,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "router-02",
+        "score": 0.161,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "nvr-01",
+        "score": 0.118,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "sensor-007",
+        "score": 0.118,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "access-ctrl-01",
+        "score": 0.11,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "cam-001",
+        "router-01"
+      ],
+      [
+        "cam-001",
+        "access-ctrl-01"
+      ],
+      [
+        "cam-001",
+        "nvr-01"
+      ],
+      [
+        "cam-001",
+        "sensor-007"
+      ],
+      [
+        "cam-001",
+        "thermostat-03"
+      ],
+      [
+        "cam-001",
+        "plc-09"
+      ],
+      [
+        "cam-001",
+        "router-02"
+      ]
+    ],
     "mitre": {
       "tactic": "Exfiltration",
       "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T11:14:20Z",
-    "source_device": "sensor-07",
-    "propagation_risk": 0.0,
-    "neighbors": [],
-    "next_target_prediction": [],
-    "attack_paths": [],
-    "mitre": {
-      "tactic": "Impact",
-      "technique": "T1489"
-    }
-  },
-  {
-    "timestamp": "2026-03-13T11:14:20Z",
-    "source_device": "router-02",
-    "propagation_risk": 0.0,
-    "neighbors": [],
-    "next_target_prediction": [],
-    "attack_paths": [],
+    "timestamp": "2026-03-13T19:33:09Z",
+    "source_device": "plc-09",
+    "propagation_risk": 0.347,
+    "neighbors": [
+      "cam-001",
+      "thermostat-03",
+      "nvr-01",
+      "access-ctrl-01",
+      "router-02",
+      "sensor-007",
+      "plc-09"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "plc-09",
+        "score": 0.243,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "router-02",
+        "score": 0.16,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "cam-001",
+        "score": 0.153,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "nvr-01",
+        "score": 0.121,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "sensor-007",
+        "score": 0.121,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "plc-09",
+        "cam-001"
+      ],
+      [
+        "plc-09",
+        "thermostat-03"
+      ],
+      [
+        "plc-09",
+        "nvr-01"
+      ],
+      [
+        "plc-09",
+        "access-ctrl-01"
+      ],
+      [
+        "plc-09",
+        "router-02"
+      ],
+      [
+        "plc-09",
+        "sensor-007"
+      ]
+    ],
     "mitre": {
       "tactic": "Exfiltration",
       "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T11:14:20Z",
+    "timestamp": "2026-03-13T19:33:09Z",
+    "source_device": "thermostat-03",
+    "propagation_risk": 0.302,
+    "neighbors": [
+      "plc-09",
+      "sensor-007",
+      "cam-001",
+      "nvr-01",
+      "router-02",
+      "thermostat-03",
+      "access-ctrl-01"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "thermostat-03",
+        "score": 0.243,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "router-02",
+        "score": 0.162,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "cam-001",
+        "score": 0.153,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "sensor-007",
+        "score": 0.121,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "nvr-01",
+        "score": 0.117,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "thermostat-03",
+        "plc-09"
+      ],
+      [
+        "thermostat-03",
+        "sensor-007"
+      ],
+      [
+        "thermostat-03",
+        "cam-001"
+      ],
+      [
+        "thermostat-03",
+        "nvr-01"
+      ],
+      [
+        "thermostat-03",
+        "router-02"
+      ],
+      [
+        "thermostat-03",
+        "access-ctrl-01"
+      ]
+    ],
+    "mitre": {
+      "tactic": "Exfiltration",
+      "technique": "T1048"
+    }
+  },
+  {
+    "timestamp": "2026-03-13T19:33:09Z",
     "source_device": "nvr-01",
-    "propagation_risk": 0.0,
-    "neighbors": [],
-    "next_target_prediction": [],
-    "attack_paths": [],
+    "propagation_risk": 0.403,
+    "neighbors": [
+      "thermostat-03",
+      "router-02",
+      "cam-001",
+      "sensor-007",
+      "nvr-01",
+      "access-ctrl-01",
+      "plc-09"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "nvr-01",
+        "score": 0.268,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "router-02",
+        "score": 0.165,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "cam-001",
+        "score": 0.151,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "sensor-007",
+        "score": 0.12,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "access-ctrl-01",
+        "score": 0.111,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "nvr-01",
+        "thermostat-03"
+      ],
+      [
+        "nvr-01",
+        "router-02"
+      ],
+      [
+        "nvr-01",
+        "cam-001"
+      ],
+      [
+        "nvr-01",
+        "sensor-007"
+      ],
+      [
+        "nvr-01",
+        "access-ctrl-01"
+      ],
+      [
+        "nvr-01",
+        "plc-09"
+      ]
+    ],
     "mitre": {
       "tactic": "Exfiltration",
       "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T11:14:20Z",
+    "timestamp": "2026-03-13T19:33:09Z",
     "source_device": "access-ctrl-01",
-    "propagation_risk": 0.0,
-    "neighbors": [],
-    "next_target_prediction": [],
-    "attack_paths": [],
+    "propagation_risk": 0.342,
+    "neighbors": [
+      "nvr-01",
+      "thermostat-03",
+      "cam-001",
+      "router-02",
+      "sensor-007",
+      "access-ctrl-01",
+      "plc-09"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "access-ctrl-01",
+        "score": 0.263,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "router-02",
+        "score": 0.161,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "cam-001",
+        "score": 0.153,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "nvr-01",
+        "score": 0.12,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "sensor-007",
+        "score": 0.118,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "access-ctrl-01",
+        "nvr-01"
+      ],
+      [
+        "access-ctrl-01",
+        "thermostat-03"
+      ],
+      [
+        "access-ctrl-01",
+        "cam-001"
+      ],
+      [
+        "access-ctrl-01",
+        "router-02"
+      ],
+      [
+        "access-ctrl-01",
+        "sensor-007"
+      ],
+      [
+        "access-ctrl-01",
+        "plc-09"
+      ]
+    ],
     "mitre": {
       "tactic": "Exfiltration",
       "technique": "T1048"
     }
   },
   {
-    "timestamp": "2026-03-13T11:14:20Z",
-    "source_device": "src_ip",
-    "propagation_risk": 0.0,
-    "neighbors": [],
-    "next_target_prediction": [],
-    "attack_paths": [],
+    "timestamp": "2026-03-13T19:33:09Z",
+    "source_device": "router-02",
+    "propagation_risk": 0.464,
+    "neighbors": [
+      "cam-001",
+      "plc-09",
+      "nvr-01",
+      "router-02",
+      "sensor-007",
+      "access-ctrl-01",
+      "thermostat-03"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "router-02",
+        "score": 0.31,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "cam-001",
+        "score": 0.155,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "nvr-01",
+        "score": 0.119,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "sensor-007",
+        "score": 0.118,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "access-ctrl-01",
+        "score": 0.11,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "router-02",
+        "cam-001"
+      ],
+      [
+        "router-02",
+        "plc-09"
+      ],
+      [
+        "router-02",
+        "nvr-01"
+      ],
+      [
+        "router-02",
+        "sensor-007"
+      ],
+      [
+        "router-02",
+        "access-ctrl-01"
+      ],
+      [
+        "router-02",
+        "thermostat-03"
+      ]
+    ],
+    "mitre": {
+      "tactic": "Exfiltration",
+      "technique": "T1048"
+    }
+  },
+  {
+    "timestamp": "2026-03-13T19:33:09Z",
+    "source_device": "sensor-007",
+    "propagation_risk": 0.265,
+    "neighbors": [
+      "nvr-01",
+      "access-ctrl-01",
+      "sensor-007",
+      "cam-001",
+      "plc-09",
+      "thermostat-03",
+      "router-02"
+    ],
+    "next_target_prediction": [
+      {
+        "device_id": "sensor-007",
+        "score": 0.269,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "router-02",
+        "score": 0.163,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "cam-001",
+        "score": 0.151,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "nvr-01",
+        "score": 0.12,
+        "why": "high flow volume"
+      },
+      {
+        "device_id": "access-ctrl-01",
+        "score": 0.11,
+        "why": "high flow volume"
+      }
+    ],
+    "attack_paths": [
+      [
+        "sensor-007",
+        "nvr-01"
+      ],
+      [
+        "sensor-007",
+        "access-ctrl-01"
+      ],
+      [
+        "sensor-007",
+        "cam-001"
+      ],
+      [
+        "sensor-007",
+        "plc-09"
+      ],
+      [
+        "sensor-007",
+        "thermostat-03"
+      ],
+      [
+        "sensor-007",
+        "router-02"
+      ]
+    ],
     "mitre": {
       "tactic": "Impact",
       "technique": "T1489"

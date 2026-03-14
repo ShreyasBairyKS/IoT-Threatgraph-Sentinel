@@ -30,5 +30,15 @@ class Settings(BaseSettings):
     # In-memory store limit for recent alerts
     MAX_ALERT_STORE: int = 500
 
+    # Risk thresholds mapping to severity levels
+    ALERT_RISK_THRESHOLD: float = 60.0
+    SEVERITY_CRITICAL_THRESHOLD: float = 85.0
+    SEVERITY_HIGH_THRESHOLD: float = 70.0
+    SEVERITY_MEDIUM_THRESHOLD: float = 50.0
+
+    # Confidence thresholds
+    CONFIDENCE_HIGH_THRESHOLD: float = 80.0
+    CONFIDENCE_MEDIUM_THRESHOLD: float = 50.0
+
 
 settings = Settings()

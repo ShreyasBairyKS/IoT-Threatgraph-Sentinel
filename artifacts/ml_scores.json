@@ -1,13 +1,14 @@
 {
   "items": [
     {
-      "timestamp": "2026-03-13T11:14:20Z",
+      "timestamp": "2026-03-13T19:33:09Z",
       "device_id": "cam-001",
       "device_type": "camera",
       "scores": {
         "isolation_forest": 100.0,
         "final_risk": 100.0,
-        "confidence": "high"
+        "confidence": "high",
+        "autoencoder": 0.0
       },
       "reason_codes": [
         "outbound_volume_spike",
@@ -19,25 +20,14 @@
       ]
     },
     {
-      "timestamp": "2026-03-13T11:14:20Z",
-      "device_id": "sensor-07",
-      "device_type": "sensor",
+      "timestamp": "2026-03-13T19:33:09Z",
+      "device_id": "plc-09",
+      "device_type": "plc",
       "scores": {
-        "isolation_forest": 64.50953237069605,
-        "final_risk": 64.50953237069605,
-        "confidence": "medium"
-      },
-      "reason_codes": [],
-      "explanations": []
-    },
-    {
-      "timestamp": "2026-03-13T11:14:20Z",
-      "device_id": "router-02",
-      "device_type": "router",
-      "scores": {
-        "isolation_forest": 100.0,
-        "final_risk": 100.0,
-        "confidence": "high"
+        "isolation_forest": 95.08555077326797,
+        "final_risk": 95.08555077326797,
+        "confidence": "high",
+        "autoencoder": 0.0
       },
       "reason_codes": [
         "outbound_volume_spike",
@@ -49,13 +39,33 @@
       ]
     },
     {
-      "timestamp": "2026-03-13T11:14:20Z",
+      "timestamp": "2026-03-13T19:33:09Z",
+      "device_id": "thermostat-03",
+      "device_type": "thermostat",
+      "scores": {
+        "isolation_forest": 82.97655798168363,
+        "final_risk": 82.97655798168363,
+        "confidence": "high",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
+    },
+    {
+      "timestamp": "2026-03-13T19:33:09Z",
       "device_id": "nvr-01",
       "device_type": "nvr",
       "scores": {
         "isolation_forest": 100.0,
         "final_risk": 100.0,
-        "confidence": "high"
+        "confidence": "high",
+        "autoencoder": 0.0
       },
       "reason_codes": [
         "outbound_volume_spike",
@@ -67,13 +77,14 @@
       ]
     },
     {
-      "timestamp": "2026-03-13T11:14:20Z",
+      "timestamp": "2026-03-13T19:33:09Z",
       "device_id": "access-ctrl-01",
       "device_type": "access_controller",
       "scores": {
-        "isolation_forest": 91.12191760215343,
-        "final_risk": 91.12191760215343,
-        "confidence": "high"
+        "isolation_forest": 86.95756862676996,
+        "final_risk": 86.95756862676996,
+        "confidence": "high",
+        "autoencoder": 0.0
       },
       "reason_codes": [
         "outbound_volume_spike",
@@ -85,13 +96,33 @@
       ]
     },
     {
-      "timestamp": "2026-03-13T11:14:20Z",
-      "device_id": "src_ip",
-      "device_type": "dst_ip",
+      "timestamp": "2026-03-13T19:33:09Z",
+      "device_id": "router-02",
+      "device_type": "router",
       "scores": {
-        "isolation_forest": 0.0,
-        "final_risk": 0.0,
-        "confidence": "low"
+        "isolation_forest": 100.0,
+        "final_risk": 100.0,
+        "confidence": "high",
+        "autoencoder": 0.0
+      },
+      "reason_codes": [
+        "outbound_volume_spike",
+        "dest_ip_diversity_jump"
+      ],
+      "explanations": [
+        "Outbound traffic is above rolling baseline",
+        "Unique destination IP count increased versus baseline"
+      ]
+    },
+    {
+      "timestamp": "2026-03-13T19:33:09Z",
+      "device_id": "sensor-007",
+      "device_type": "sensor",
+      "scores": {
+        "isolation_forest": 65.72898937341476,
+        "final_risk": 65.72898937341476,
+        "confidence": "medium",
+        "autoencoder": 0.0
       },
       "reason_codes": [],
       "explanations": []

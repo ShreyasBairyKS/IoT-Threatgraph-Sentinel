@@ -2,6 +2,282 @@
   "directed": true,
   "multigraph": false,
   "graph": {},
-  "nodes": [],
-  "links": []
+  "nodes": [
+    {
+      "id": "cam-001"
+    },
+    {
+      "id": "router-01"
+    },
+    {
+      "id": "plc-09"
+    },
+    {
+      "id": "thermostat-03"
+    },
+    {
+      "id": "nvr-01"
+    },
+    {
+      "id": "access-ctrl-01"
+    },
+    {
+      "id": "router-02"
+    },
+    {
+      "id": "sensor-007"
+    }
+  ],
+  "links": [
+    {
+      "weight": 1,
+      "source": "cam-001",
+      "target": "router-01"
+    },
+    {
+      "weight": 111,
+      "source": "cam-001",
+      "target": "access-ctrl-01"
+    },
+    {
+      "weight": 170,
+      "source": "cam-001",
+      "target": "cam-001"
+    },
+    {
+      "weight": 120,
+      "source": "cam-001",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 116,
+      "source": "cam-001",
+      "target": "sensor-007"
+    },
+    {
+      "weight": 102,
+      "source": "cam-001",
+      "target": "thermostat-03"
+    },
+    {
+      "weight": 112,
+      "source": "cam-001",
+      "target": "plc-09"
+    },
+    {
+      "weight": 168,
+      "source": "cam-001",
+      "target": "router-02"
+    },
+    {
+      "weight": 99,
+      "source": "plc-09",
+      "target": "cam-001"
+    },
+    {
+      "weight": 64,
+      "source": "plc-09",
+      "target": "thermostat-03"
+    },
+    {
+      "weight": 84,
+      "source": "plc-09",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 60,
+      "source": "plc-09",
+      "target": "access-ctrl-01"
+    },
+    {
+      "weight": 99,
+      "source": "plc-09",
+      "target": "router-02"
+    },
+    {
+      "weight": 84,
+      "source": "plc-09",
+      "target": "sensor-007"
+    },
+    {
+      "weight": 60,
+      "source": "plc-09",
+      "target": "plc-09"
+    },
+    {
+      "weight": 55,
+      "source": "thermostat-03",
+      "target": "plc-09"
+    },
+    {
+      "weight": 88,
+      "source": "thermostat-03",
+      "target": "sensor-007"
+    },
+    {
+      "weight": 99,
+      "source": "thermostat-03",
+      "target": "cam-001"
+    },
+    {
+      "weight": 67,
+      "source": "thermostat-03",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 105,
+      "source": "thermostat-03",
+      "target": "router-02"
+    },
+    {
+      "weight": 57,
+      "source": "thermostat-03",
+      "target": "thermostat-03"
+    },
+    {
+      "weight": 79,
+      "source": "thermostat-03",
+      "target": "access-ctrl-01"
+    },
+    {
+      "weight": 70,
+      "source": "nvr-01",
+      "target": "thermostat-03"
+    },
+    {
+      "weight": 150,
+      "source": "nvr-01",
+      "target": "router-02"
+    },
+    {
+      "weight": 115,
+      "source": "nvr-01",
+      "target": "cam-001"
+    },
+    {
+      "weight": 103,
+      "source": "nvr-01",
+      "target": "sensor-007"
+    },
+    {
+      "weight": 94,
+      "source": "nvr-01",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 96,
+      "source": "nvr-01",
+      "target": "access-ctrl-01"
+    },
+    {
+      "weight": 72,
+      "source": "nvr-01",
+      "target": "plc-09"
+    },
+    {
+      "weight": 96,
+      "source": "access-ctrl-01",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 69,
+      "source": "access-ctrl-01",
+      "target": "thermostat-03"
+    },
+    {
+      "weight": 119,
+      "source": "access-ctrl-01",
+      "target": "cam-001"
+    },
+    {
+      "weight": 120,
+      "source": "access-ctrl-01",
+      "target": "router-02"
+    },
+    {
+      "weight": 84,
+      "source": "access-ctrl-01",
+      "target": "sensor-007"
+    },
+    {
+      "weight": 94,
+      "source": "access-ctrl-01",
+      "target": "access-ctrl-01"
+    },
+    {
+      "weight": 68,
+      "source": "access-ctrl-01",
+      "target": "plc-09"
+    },
+    {
+      "weight": 183,
+      "source": "router-02",
+      "target": "cam-001"
+    },
+    {
+      "weight": 105,
+      "source": "router-02",
+      "target": "plc-09"
+    },
+    {
+      "weight": 137,
+      "source": "router-02",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 165,
+      "source": "router-02",
+      "target": "router-02"
+    },
+    {
+      "weight": 128,
+      "source": "router-02",
+      "target": "sensor-007"
+    },
+    {
+      "weight": 119,
+      "source": "router-02",
+      "target": "access-ctrl-01"
+    },
+    {
+      "weight": 113,
+      "source": "router-02",
+      "target": "thermostat-03"
+    },
+    {
+      "weight": 102,
+      "source": "sensor-007",
+      "target": "nvr-01"
+    },
+    {
+      "weight": 91,
+      "source": "sensor-007",
+      "target": "access-ctrl-01"
+    },
+    {
+      "weight": 97,
+      "source": "sensor-007",
+      "target": "sensor-007"
+    },
+    {
+      "weight": 115,
+      "source": "sensor-007",
+      "target": "cam-001"
+    },
+    {
+      "weight": 78,
+      "source": "sensor-007",
+      "target": "plc-09"
+    },
+    {
+      "weight": 74,
+      "source": "sensor-007",
+      "target": "thermostat-03"
+    },
+    {
+      "weight": 143,
+      "source": "sensor-007",
+      "target": "router-02"
+    }
+  ]
 }

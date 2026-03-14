@@ -55,6 +55,7 @@ export default function App() {
     alert_submissions: 0,
     non_alert_submissions: 0,
   });
+  const [baseEnrichment, setBaseEnrichment] = useState<GraphEnrichment>(MOCK_GRAPH_ENRICHMENT);
 
   // Build replay frames from alerts
   const replayFrames = buildReplayFrames(alerts);
@@ -78,6 +79,13 @@ export default function App() {
         .catch(() => {});
     };
 
+    const loadGraph = () => {
+      fetch(`${API_BASE}/graph`)
+        .then((r) => r.json())
+        .then((data: GraphEnrichment) => setBaseEnrichment(data))
+        .catch(() => setBaseEnrichment(MOCK_GRAPH_ENRICHMENT));
+    };
+
     fetch(`${API_BASE}/alerts`)
       .then((r) => r.json())
       .then((data: AlertEvent[]) => {
@@ -91,10 +99,12 @@ export default function App() {
 
     loadDevices();
     loadSummary();
+    loadGraph();
 
     const pollId = window.setInterval(() => {
       loadDevices();
       loadSummary();
+      loadGraph();
     }, 4000);
 
     return () => window.clearInterval(pollId);
@@ -220,8 +230,8 @@ export default function App() {
 
   // Derive graph enrichment from live alert for the threat graph
   const activeEnrichment: GraphEnrichment = liveSnapshot?.enrichment ?? (liveAlert
-    ? buildEnrichmentFromAlert(liveAlert, 'live feed')
-    : MOCK_GRAPH_ENRICHMENT);
+    ? buildEnrichmentFromAlert(liveAlert, 'live feed') 
+    : baseEnrichment);
 
   const liveGraphDevices = liveSnapshot?.devices ?? devices;
 
@@ -347,6 +357,7 @@ export default function App() {
               device={selectedDevice}
               selectedAlert={selectedAlert}
               liveAlert={liveAlert}
+              alerts={alerts}
               onClose={() => {
                 setSelectedDevice(null);
                 setSelectedAlert(null);

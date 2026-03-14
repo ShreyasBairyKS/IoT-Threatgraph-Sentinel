@@ -21,10 +21,19 @@ def build_graph_from_flows(csv_path: str) -> nx.DiGraph:
                 
                 # In docs, device representations often use IDs like 'cam-001'.
                 # We'll use source/dest as the node identifiers.
-                src = row.get('src_ip', row.get('source_device', 'unknown_src'))
-                dst = row.get('dst_ip', row.get('target_device', 'unknown_dst'))
+                src = row.get('src_ip', row.get('source_device'))
+                dst = row.get('dst_ip', row.get('target_device'))
                 
-                if src == 'unknown_src' or dst == 'unknown_dst':
+                device_id = row.get('device_id')
+                if device_id and (not src or not dst):
+                    # For metrics-only flow CSVs, simulate edges round-robin
+                    if not hasattr(build_graph_from_flows, 'last_device'):
+                        build_graph_from_flows.last_device = "router-01"
+                    src = device_id
+                    dst = build_graph_from_flows.last_device
+                    build_graph_from_flows.last_device = src
+                    
+                if not src or not dst:
                     continue
                 
                 if not G.has_node(src):

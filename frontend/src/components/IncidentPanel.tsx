@@ -10,10 +10,11 @@ interface IncidentPanelProps {
   device: Device | null;
   selectedAlert: AlertEvent | null;
   liveAlert: AlertEvent | null;
+  alerts: AlertEvent[];
   onClose: () => void;
 }
 
-export function IncidentPanel({ device, selectedAlert, liveAlert, onClose }: IncidentPanelProps) {
+export function IncidentPanel({ device, selectedAlert, liveAlert, alerts, onClose }: IncidentPanelProps) {
   const [report, setReport] = useState<IncidentReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
 
@@ -47,16 +48,32 @@ export function IncidentPanel({ device, selectedAlert, liveAlert, onClose }: Inc
   }
 
   const riskClass =
-    device.risk_score >= 80 ? 'critical'
-    : device.risk_score >= 60 ? 'high'
-    : device.risk_score >= 40 ? 'medium'
-    : 'low';
+      device.status === 'critical' ? 'critical'
+      : device.status === 'suspicious' ? 'high'
+      : device.confidence === 'medium' ? 'medium'
+      : 'low';
 
   const chartColor =
     riskClass === 'critical' ? '#ef4444'
     : riskClass === 'high' ? '#f97316'
     : riskClass === 'medium' ? '#eab308'
     : '#22c55e';
+
+  const deviceAlerts = alerts
+    .filter((a) => a.device_id === device.device_id)
+    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+  const computedTrend = deviceAlerts.map((a) => {
+    const d = new Date(a.timestamp);
+    return {
+      time: `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`,
+      risk: a.risk_score,
+    };
+  });
+
+  const riskTrendData = computedTrend.length >= 2 
+    ? computedTrend 
+    : [...MOCK_RISK_TREND.slice(0, 6), { time: 'Now', risk: device.risk_score }];
 
   return (
     <div className="panel">
@@ -93,7 +110,7 @@ export function IncidentPanel({ device, selectedAlert, liveAlert, onClose }: Inc
         <div style={{ background: 'var(--bg-elevated)', borderRadius: 'var(--radius-md)', padding: '12px 8px 8px', border: '1px solid var(--border)' }}>
           <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 8, paddingLeft: 4 }}>Risk Trend (last 10 min)</div>
           <ResponsiveContainer width="100%" height={90}>
-            <AreaChart data={MOCK_RISK_TREND} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+            <AreaChart data={riskTrendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
                 <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor={chartColor} stopOpacity={0.4} />

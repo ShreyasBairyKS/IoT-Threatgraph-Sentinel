@@ -20,6 +20,14 @@ from pathlib import Path
 import numpy as np
 
 from ml.features import FEATURE_KEYS, build_windows, load_csv
+from ml.settings import (
+    DEFAULT_MODEL_DIR,
+    TRAIN_AE_HIDDEN_SIZES,
+    TRAIN_AE_MAX_ITER,
+    TRAIN_IF_CONTAMINATION,
+    TRAIN_IF_N_ESTIMATORS,
+    TRAIN_RF_N_ESTIMATORS,
+)
 
 # ---------------------------------------------------------------------------
 # Vector helpers
@@ -56,14 +64,14 @@ def train_isolation_forest(X: np.ndarray, random_state: int = 42) -> object:
     """
     Fit an IsolationForest on feature matrix X.
 
-    contamination=0.15 means ~15 % of training windows treated as anomalies —
-    reasonable for a mixed benign/attack replay dataset.
+    contamination="auto" means the model will determine the anomaly threshold dynamically,
+    rather than strictly forcing ~15% into anomalies. This is more robust for unknown sets.
     """
     from sklearn.ensemble import IsolationForest  # type: ignore[import]
 
     clf = IsolationForest(
-        n_estimators=200,
-        contamination=0.15,
+        n_estimators=TRAIN_IF_N_ESTIMATORS,
+        contamination="auto",
         random_state=random_state,
         n_jobs=-1,
     )
@@ -74,20 +82,14 @@ def train_isolation_forest(X: np.ndarray, random_state: int = 42) -> object:
 def isolation_forest_score(clf: object, X: np.ndarray) -> np.ndarray:
     """
     Return anomaly scores in [0, 100] (higher = more anomalous).
-
-    sklearn's decision_function returns negative values for anomalies;
-    we invert and normalise to 0-100.
+    Uses a sigmoid over the decision function for robust bounding.
     """
     from sklearn.ensemble import IsolationForest  # type: ignore[import]
 
     assert isinstance(clf, IsolationForest)
-    raw = clf.decision_function(X)           # lower (more negative) = more anomalous
-    # Invert: anomaly score = -raw, then min-max scale to 0-100
-    inverted = -raw
-    lo, hi = inverted.min(), inverted.max()
-    if hi == lo:
-        return np.full(len(X), 50.0)
-    return ((inverted - lo) / (hi - lo) * 100).clip(0, 100)
+    raw = clf.decision_function(X)
+    scores = 100.0 / (1.0 + np.exp(raw))
+    return np.clip(scores, 0.0, 100.0)
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +122,7 @@ def train_device_classifier(
     y = le.fit_transform(y_raw)
 
     clf = RandomForestClassifier(
-        n_estimators=200,
+        n_estimators=TRAIN_RF_N_ESTIMATORS,
         random_state=random_state,
         n_jobs=-1,
     )
@@ -149,10 +151,10 @@ def train_autoencoder(X: np.ndarray, random_state: int = 42) -> object:
     from sklearn.neural_network import MLPRegressor  # type: ignore[import]
 
     ae = MLPRegressor(
-        hidden_layer_sizes=(16, 8, 16),
+        hidden_layer_sizes=TRAIN_AE_HIDDEN_SIZES,
         activation="relu",
         solver="adam",
-        max_iter=500,
+        max_iter=TRAIN_AE_MAX_ITER,
         random_state=random_state,
     )
     ae.fit(X, X)
@@ -199,7 +201,7 @@ def load_artifact(path: Path) -> object:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Train Isolation Forest and device type classifier.")
     ap.add_argument("--input",     required=True, help="Input CSV file path.")
-    ap.add_argument("--model-dir", default="artifacts/models", help="Directory to save model artifacts.")
+    ap.add_argument("--model-dir", default=DEFAULT_MODEL_DIR, help="Directory to save model artifacts.")
     ap.add_argument("--random-state", type=int, default=42)
     ap.add_argument(
         "--disable-autoencoder",

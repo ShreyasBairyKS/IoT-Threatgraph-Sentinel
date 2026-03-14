@@ -5,6 +5,15 @@ from typing import Dict, List, Tuple
 from datetime import datetime
 
 from graph.models import AnomalyResult, GraphEnrichment, NextTargetPrediction, MitreTag
+from graph.settings import (
+    ATTACK_TRACE_DEPTH,
+    DEFAULT_GRAPH_ENRICHMENT_PATH,
+    DEFAULT_GRAPH_PATH,
+    HIGH_FLOW_VOLUME_WEIGHT_THRESHOLD,
+    NEXT_TARGET_TOP_K,
+    PAGERANK_EDGE_WEIGHT_KEY,
+    PROPAGATION_RISK_MULTIPLIER,
+)
 
 # MITRE ATT&CK Mapping
 MITRE_MAPPING = {
@@ -27,23 +36,27 @@ def calculate_propagation_risk(G: nx.DiGraph, anomalous_node: str, base_risk: fl
     personalization[anomalous_node] = 1.0
     
     try:
-        pr = nx.pagerank(G, personalization=personalization, weight='weight')
+        pr = nx.pagerank(G, personalization=personalization, weight=PAGERANK_EDGE_WEIGHT_KEY)
     except Exception as e:
         print(f"PageRank error: {e}")
         pr = {n: 0.0 for n in G.nodes()}
 
     # Calculate propagation risk: high if the node is highly central to the sub-graph
-    propagation_risk = min(1.0, pr.get(anomalous_node, 0.0) * base_risk * 1.5)
+    propagation_risk = min(1.0, pr.get(anomalous_node, 0.0) * base_risk * PROPAGATION_RISK_MULTIPLIER)
     
     # Predict next targets based on outflowing edges and PageRank scores
     next_targets = []
     for neighbor in G.successors(anomalous_node):
         score = pr.get(neighbor, 0.0)
-        why = "high flow volume" if G[anomalous_node][neighbor].get('weight', 0) > 5 else "frequent bidirectional flow"
+        why = (
+            "high flow volume"
+            if G[anomalous_node][neighbor].get('weight', 0) > HIGH_FLOW_VOLUME_WEIGHT_THRESHOLD
+            else "frequent bidirectional flow"
+        )
         next_targets.append(NextTargetPrediction(device_id=neighbor, score=round(score, 3), why=why))
         
     next_targets.sort(key=lambda x: x.score, reverse=True)
-    return round(propagation_risk, 3), next_targets[:5] # Return top 5
+    return round(propagation_risk, 3), next_targets[:NEXT_TARGET_TOP_K]
 
 def trace_attack_paths(G: nx.DiGraph, start_node: str, depth: int = 2) -> List[List[str]]:
     """
@@ -73,7 +86,7 @@ def map_mitre_tags(reason_codes: List[str]) -> MitreTag:
             return MITRE_MAPPING[code]
     return DEFAULT_MITRE
 
-def process_anomalies(graph_path: str, scores_path: str, output_path: str):
+def process_anomalies(graph_path: str, scores_path: str, output_path: str, api_url: str = None):
     try:
         with open(graph_path, 'r') as f:
             data = json.load(f)
@@ -109,7 +122,7 @@ def process_anomalies(graph_path: str, scores_path: str, output_path: str):
         
         prop_risk, targets = calculate_propagation_risk(G, anomalous_device, base_risk)
         neighbors = list(G.successors(anomalous_device)) if G.has_node(anomalous_device) else []
-        attack_paths = trace_attack_paths(G, anomalous_device, depth=2)
+        attack_paths = trace_attack_paths(G, anomalous_device, depth=ATTACK_TRACE_DEPTH)
         mitre_tag = map_mitre_tags(result.reason_codes)
         
         enrichment = GraphEnrichment(
@@ -129,11 +142,27 @@ def process_anomalies(graph_path: str, scores_path: str, output_path: str):
         
     print(f"Saved {len(enrichments)} enrichments to {output_path}")
 
+    # Real connection: push data to backend
+    if api_url:
+        import urllib.request
+        for payload in enrichments:
+            try:
+                req = urllib.request.Request(
+                    api_url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req)
+                print(f"Posted {payload.get('source_device')} graph enrichment to backend")
+            except Exception as e:
+                print(f"Warning: Failed to fallback/post graph enrichment: {e}")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calculate propagation risk and Graph Enrichment.")
-    parser.add_argument("--graph", default="artifacts/graph.json", help="Path to graph JSON built by build_graph.py")
+    parser.add_argument("--graph", default=DEFAULT_GRAPH_PATH, help="Path to graph JSON built by build_graph.py")
     parser.add_argument("--scores", required=True, help="Path to ML anomaly scores JSON")
-    parser.add_argument("--output", default="artifacts/graph_enrichment.json", help="Path to output enrichment JSON")
+    parser.add_argument("--output", default=DEFAULT_GRAPH_ENRICHMENT_PATH, help="Path to output enrichment JSON")
+    parser.add_argument("--api-url", default=None, help="Backend API URL to post results (e.g. http://localhost:8000/ingest/graph)")
     
     args = parser.parse_args()
-    process_anomalies(args.graph, args.scores, args.output)
+    process_anomalies(args.graph, args.scores, args.output, args.api_url)

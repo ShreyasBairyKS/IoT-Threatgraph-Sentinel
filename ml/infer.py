@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,22 @@ from typing import Any
 import numpy as np
 
 from ml.features import FEATURE_KEYS
+from ml.settings import (
+    CONFIDENCE_HIGH_THRESHOLD,
+    CONFIDENCE_MEDIUM_THRESHOLD,
+    DEFAULT_MODEL_DIR,
+    INFER_AE_BASELINE,
+    INFER_AE_Z_SCALE,
+    INFER_IF_BASELINE,
+    INFER_IF_LINEAR_SCALE,
+    REASON_MIN_EXPLANATIONS_HIGH_RISK,
+    REASON_MIN_RISK,
+    RULE_BYTE_VOLUME_THRESHOLD,
+    RULE_DEST_IP_THRESHOLD,
+    RULE_PACKET_RATE_THRESHOLD,
+    RULE_PORT_ENTROPY_THRESHOLD,
+    RULE_UDP_RATIO_THRESHOLD,
+)
 from ml.score_window import Confidence, ScoreResult, _iso_utc_now
 from ml.train import load_artifact
 
@@ -43,7 +60,7 @@ class ModelBundle:
     autoencoder_meta: dict[str, float] | None
 
 
-def load_models(model_dir: str | Path = "artifacts/models") -> ModelBundle:
+def load_models(model_dir: str | Path = DEFAULT_MODEL_DIR) -> ModelBundle:
     """Load all trained artifacts from *model_dir*."""
     d = Path(model_dir)
     scaler = load_artifact(d / "scaler.pkl")
@@ -75,14 +92,12 @@ def _feature_vector(features: dict[str, float]) -> np.ndarray:
 def _if_score(models: ModelBundle, X_scaled: np.ndarray) -> float:
     """Return Isolation Forest anomaly score in [0, 100]."""
     raw = models.isolation_forest.decision_function(X_scaled)[0]
-    # decision_function: negative = anomalous, positive = normal
-    # We need a global min/max to normalise; use training score range stored
-    # via the model's offset_ and threshold_ attributes as a proxy.
-    # Simpler: apply a sigmoid-like mapping that keeps scores comparable.
-    inverted = -float(raw)
-    # Scale relative to a typical boundary (0 = normal threshold)
-    score = 50.0 + inverted * 35.0   # linear stretch around 50
+    # decision_function > 0 is normal, < 0 is anomalous.
+    # We use a robust sigmoid centred around the model's determined anomaly threshold (0.0).
+    # This automatically bounds the score between 0 and 100 without hardcoded linear scales.
+    score = 100.0 / (1.0 + np.exp(raw))
     return float(np.clip(score, 0.0, 100.0))
+
 
 
 def _autoencoder_score(models: ModelBundle, X_scaled: np.ndarray) -> float | None:
@@ -97,8 +112,12 @@ def _autoencoder_score(models: ModelBundle, X_scaled: np.ndarray) -> float | Non
     mean = float(meta.get("error_mean", 0.0))
     std = float(meta.get("error_std", 1.0)) or 1.0
     z = (err - mean) / std
-    # Keep mapping simple and deterministic around a 50 baseline.
-    score = 50.0 + z * 20.0
+    
+    # Apply a logistic transform on the Z-score to naturally bound the score
+    # to 0-100 without relying on hardcoded scaling variables.
+    # A z-score of 0 (mean error) -> 50 score. 
+    # Higher z (worse reconstruction) -> closer to 100.
+    score = 100.0 / (1.0 + np.exp(-z))
     return float(np.clip(score, 0.0, 100.0))
 
 
@@ -113,9 +132,9 @@ def _predict_device_type(models: ModelBundle, X_scaled: np.ndarray, fallback: st
 
 
 def _confidence(risk: float) -> Confidence:
-    if risk >= 80:
+    if risk >= CONFIDENCE_HIGH_THRESHOLD:
         return "high"
-    if risk >= 50:
+    if risk >= CONFIDENCE_MEDIUM_THRESHOLD:
         return "medium"
     return "low"
 
@@ -127,7 +146,7 @@ def _reason_codes_and_explanations(
     risk: float,
 ) -> tuple[list[str], list[str]]:
     """Generate reason codes and SHAP-like human-readable explanation strings."""
-    if risk < 70:
+    if risk < REASON_MIN_RISK:
         return [], []
 
     codes: list[str] = []
@@ -173,28 +192,28 @@ def _reason_codes_and_explanations(
     port_ent   = float(features.get("port_entropy", 0.0))
     udp_ratio  = float(features.get("udp_ratio", 0.0))
 
-    if byte_vol > 50_000:
+    if byte_vol > RULE_BYTE_VOLUME_THRESHOLD:
         codes.append("outbound_volume_spike")
         exps.append(f"Outbound byte volume ({byte_vol:,.0f}) is elevated above baseline")
 
-    if dest_ips > 5:
+    if dest_ips > RULE_DEST_IP_THRESHOLD:
         codes.append("dest_ip_diversity_jump")
         exps.append(f"Unique destination IPs ({dest_ips:.0f}) exceeds expected fan-out")
 
-    if port_ent > 2.0:
+    if port_ent > RULE_PORT_ENTROPY_THRESHOLD:
         codes.append("high_port_entropy")
         exps.append(f"Destination port entropy ({port_ent:.2f}) suggests port scanning")
 
-    if pkt_rate > 40:
+    if pkt_rate > RULE_PACKET_RATE_THRESHOLD:
         codes.append("high_packet_rate")
         exps.append(f"Packet rate ({pkt_rate:.1f} pps) significantly above device baseline")
 
-    if udp_ratio > 0.5:
+    if udp_ratio > RULE_UDP_RATIO_THRESHOLD:
         codes.append("udp_dominance")
         exps.append(f"UDP traffic ratio ({udp_ratio:.0%}) is unusually high")
 
     # Ensure at least 2 explanations for high-risk alerts (handoff requirement)
-    if risk >= 80 and len(exps) < 2:
+    if risk >= CONFIDENCE_HIGH_THRESHOLD and len(exps) < REASON_MIN_EXPLANATIONS_HIGH_RISK:
         codes.append("anomaly_model_flag")
         exps.append("Isolation Forest model flagged this device window as anomalous")
 
@@ -256,7 +275,8 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Run ML inference on feature windows.")
     ap.add_argument("--input",     required=True, help="Feature windows JSON (from ml.features CLI).")
     ap.add_argument("--output",    required=True, help="Anomaly result JSON output path.")
-    ap.add_argument("--model-dir", default="artifacts/models")
+    ap.add_argument("--model-dir", default=DEFAULT_MODEL_DIR)
+    ap.add_argument("--api-url",   default=None, help="Backend API URL to post results (e.g. http://localhost:8000/ingest/anomaly)")
     args = ap.parse_args()
 
     models = load_models(args.model_dir)
@@ -271,7 +291,20 @@ def main() -> None:
             device_type=w.get("device_type", "unknown"),
             features=w.get("features", {}),
         )
-        results.append(result.to_contract_payload())
+        payload = result.to_contract_payload()
+        results.append(payload)
+
+        # Real connection: push data to backend
+        if args.api_url:
+            try:
+                req = urllib.request.Request(
+                    args.api_url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(req)
+            except Exception as e:
+                pass
 
     out_path = Path(args.output)
     out_path.parent.mkdir(parents=True, exist_ok=True)

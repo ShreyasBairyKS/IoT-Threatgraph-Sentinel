@@ -90,7 +90,7 @@ interface AlertFeedProps {
 export function AlertFeed({ alerts, devices, onAlertClick, selectedAlertId = null }: AlertFeedProps) {
   const visibleAlerts = alerts.slice(0, 30);
   const quietDevices = devices
-    .filter((device) => device.risk_score < 60)
+    .filter((device) => device.status === 'normal')
     .sort((a, b) => a.risk_score - b.risk_score)
     .slice(0, 6);
 

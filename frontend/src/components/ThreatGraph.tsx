@@ -4,11 +4,12 @@ import type { Core, ElementDefinition, LayoutOptions, StylesheetJson } from 'cyt
 import { GitBranch, LocateFixed, ScanSearch } from 'lucide-react';
 import type { Device, GraphEnrichment } from '../types/contracts';
 
-function nodeColor(risk: number): string {
-  if (risk >= 80) return '#ef4444';
-  if (risk >= 60) return '#f97316';
-  if (risk >= 40) return '#eab308';
-  if (risk >= 20) return '#22c55e';
+function nodeColor(device?: Device): string {
+  if (!device) return '#3b82f6'; // normal
+  if (device.status === 'critical') return '#ef4444';
+  if (device.status === 'suspicious') return '#f97316';
+  if (device.confidence === 'medium') return '#eab308';
+  if (device.confidence === 'low' && device.status !== 'normal') return '#22c55e';
   return '#3b82f6';
 }
 
@@ -47,7 +48,7 @@ function buildElements(
         label: shortenLabel(id),
         fullLabel: id,
         risk,
-        color: nodeColor(risk),
+        color: nodeColor(device),
         inPath: attackPath.includes(id),
         isSource: enrichment.source_device === id,
         isHighlighted: highlightedDeviceId === id,
