@@ -43,7 +43,11 @@ class ConnectionManager:
     async def broadcast(self, payload: dict[str, Any]) -> None:
         """Send payload to all connected clients. Remove dead connections."""
         dead: list[WebSocket] = []
-        for connection in self.active_connections:
+        # Iterate a snapshot: each await below is a suspension point where a
+        # concurrent disconnect() could mutate active_connections, which would
+        # shift list indices mid-iteration and cause a still-connected client
+        # to be skipped for this broadcast.
+        for connection in list(self.active_connections):
             try:
                 await connection.send_json(payload)
             except Exception:

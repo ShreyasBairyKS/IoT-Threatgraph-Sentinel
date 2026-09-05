@@ -81,11 +81,15 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS: allow P4 frontend (any origin in dev mode)
+# CORS: allow P4 frontend (any origin in dev mode). No cookie/session-based
+# auth is used anywhere in this API, so allow_credentials stays False —
+# combining a wildcard origin with allow_credentials=True would make
+# CORSMiddleware reflect the request's Origin header, permitting any origin
+# to make credentialed cross-site requests.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

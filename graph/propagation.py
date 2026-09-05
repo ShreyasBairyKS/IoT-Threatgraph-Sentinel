@@ -172,8 +172,15 @@ def process_anomalies(graph_path: str, scores_path: str, output_path: str):
         enrichments.append(enrichment.model_dump(mode='json'))
 
     # Save outputs
+    if not enrichments:
+        output_data = []
+    elif len(enrichments) == 1:
+        output_data = enrichments[0]
+    else:
+        output_data = enrichments
+
     with open(output_path, 'w') as f:
-        json.dump(enrichments if len(enrichments) > 1 else enrichments[0], f, indent=2)
+        json.dump(output_data, f, indent=2)
         
     print(f"Saved {len(enrichments)} enrichments to {output_path}")
 

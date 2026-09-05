@@ -191,6 +191,11 @@ export function ThreatGraph({
 }: ThreatGraphProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
+  const onNodeClickRef = useRef(onNodeClick);
+
+  useEffect(() => {
+    onNodeClickRef.current = onNodeClick;
+  }, [onNodeClick]);
 
   const attackPath = enrichment.attack_paths[0] ?? [];
   const totalImpactedDevices = new Set([
@@ -247,7 +252,7 @@ export function ThreatGraph({
     });
 
     cy.on('tap', 'node', (event) => {
-      onNodeClick(event.target.id() as string);
+      onNodeClickRef.current(event.target.id() as string);
     });
 
     cyRef.current = cy;

@@ -42,6 +42,11 @@ def main() -> None:
     items: list[dict] = []
     try:
         models = load_models(args.model_dir)
+    except Exception as exc:
+        print(f"Could not load trained models from {args.model_dir} ({exc}); falling back to heuristic scoring.")
+        models = None
+
+    if models is not None:
         best_by_device: dict[str, object] = {}
         for window in windows:
             device_id = str(window.get("device_id", "unknown"))
@@ -57,7 +62,7 @@ def main() -> None:
                 best_by_device[device_id] = result
 
         items = [best_by_device[device_id].to_contract_payload() for device_id in sorted(best_by_device)]
-    except Exception:
+    else:
         feature_means_by_device: dict[str, list[dict[str, float]]] = {}
         for window in windows:
             device_id = str(window.get("device_id", "unknown"))

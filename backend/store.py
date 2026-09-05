@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import uuid
-from collections import deque
+from collections import OrderedDict, deque
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
@@ -40,6 +41,18 @@ logger = logging.getLogger(__name__)
 # Override via ALERT_RISK_THRESHOLD env var (see backend/config.py)
 # ---------------------------------------------------------------------------
 ALERT_RISK_THRESHOLD: float = settings.ALERT_RISK_THRESHOLD
+
+def clamp_risk_score(score: float) -> float:
+    """
+    Clamp a raw risk score into the AlertEvent contract's valid [0, 100]
+    range, guarding against NaN/Inf from upstream ML scoring. Without this,
+    an out-of-range value passes AnomalyResult validation (which places no
+    bound on final_risk) but blows up AlertEvent's ge=0/le=100 constraint.
+    """
+    if score is None or math.isnan(score) or math.isinf(score):
+        return 0.0
+    return max(0.0, min(100.0, score))
+
 
 # Severity bands
 def _risk_to_severity(score: float) -> Literal["low", "medium", "high", "critical"]:
@@ -131,20 +144,27 @@ class GraphStore:
 
     async def get(self, device_id: str | None = None) -> Optional[GraphEnrichment]:
         """
-        Return the enrichment for *device_id* if provided, otherwise return the
-        most recently ingested enrichment (legacy behaviour).
+        Return the enrichment for *device_id* if provided (or None if that
+        device has no enrichment yet), otherwise return the most recently
+        ingested enrichment (legacy behaviour).
         """
         async with self._lock:
             if device_id is not None:
-                return self._by_device.get(device_id) or self._latest
+                return self._by_device.get(device_id)
             return self._latest
 
 
 class AlertContextStore:
-    """Stores per-alert graph + device snapshot context for later drill-down."""
+    """Stores per-alert graph + device snapshot context for later drill-down.
 
-    def __init__(self) -> None:
-        self._contexts: dict[str, dict[str, object]] = {}
+    Bounded like AlertStore/FeedStore: with the real-time/synthetic streams
+    enabled (the default), an alert is saved here continuously, so without an
+    eviction cap this would grow for the lifetime of the process.
+    """
+
+    def __init__(self, maxlen: int = settings.MAX_ALERT_STORE) -> None:
+        self._contexts: "OrderedDict[str, dict[str, object]]" = OrderedDict()
+        self._maxlen = maxlen
         self._lock = asyncio.Lock()
 
     async def save(
@@ -158,6 +178,9 @@ class AlertContextStore:
                 "devices": devices,
                 "enrichment": enrichment,
             }
+            self._contexts.move_to_end(event_id)
+            while len(self._contexts) > self._maxlen:
+                self._contexts.popitem(last=False)
 
     async def get(self, event_id: str) -> Optional[dict[str, object]]:
         async with self._lock:
@@ -205,14 +228,15 @@ def build_alert_event(
     mitre = graph.mitre if graph else MITRETag(tactic="Unknown", technique="T0000")
     path = graph.attack_paths[0] if graph and graph.attack_paths else [anomaly.device_id]
     next_targets = [p.device_id for p in graph.next_target_prediction] if graph else []
+    risk_score = clamp_risk_score(anomaly.scores.final_risk)
 
     return AlertEvent(
         event_id=f"evt_{uuid.uuid4().hex[:6]}",
         timestamp=datetime.now(tz=timezone.utc),
-        severity=_risk_to_severity(anomaly.scores.final_risk),
+        severity=_risk_to_severity(risk_score),
         device_id=anomaly.device_id,
         device_type=anomaly.device_type,
-        risk_score=anomaly.scores.final_risk,
+        risk_score=risk_score,
         confidence=anomaly.scores.confidence,
         reasons=anomaly.explanations,
         mitre=mitre,

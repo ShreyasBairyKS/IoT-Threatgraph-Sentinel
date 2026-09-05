@@ -146,22 +146,41 @@ def build_graph_from_flows(csv_path: str) -> nx.DiGraph:
             if not has_src_dst:
                 return _build_similarity_graph(rows)
 
+            # Each row also carries its own device_id/device_type pair (used
+            # elsewhere in the pipeline); tie that back to whichever edge
+            # identifier corresponds to that device so nodes on the src/dst
+            # path aren't left without a device_type (device-importance
+            # weighting in graph/propagation.py depends on it).
+            device_type_by_node: dict[str, str] = {}
+            for row in rows:
+                dev_type = (row.get('device_type') or '').strip()
+                if not dev_type:
+                    continue
+                for key in ('device_id', 'src_ip', 'source_device'):
+                    node_id = (row.get(key) or '').strip()
+                    if node_id:
+                        device_type_by_node.setdefault(node_id, dev_type)
+
             for row in rows:
                 # The exact column names depend on the dataset (CIC-IoT-2023 / N-BaIoT)
                 # Assuming generic names for now: 'src_ip', 'dst_ip'
 
                 # In docs, device representations often use IDs like 'cam-001'.
-                # We'll use source/dest as the node identifiers.
-                src = row.get('src_ip', row.get('source_device', 'unknown_src'))
-                dst = row.get('dst_ip', row.get('target_device', 'unknown_dst'))
+                # We'll use source/dest as the node identifiers. Fall back to
+                # the alternate column only when the preferred one is missing
+                # OR blank (a present-but-empty 'src_ip'/'dst_ip' cell would
+                # otherwise short-circuit `.get(key, default)` before ever
+                # trying the fallback column).
+                src = (row.get('src_ip') or row.get('source_device') or '').strip()
+                dst = (row.get('dst_ip') or row.get('target_device') or '').strip()
 
-                if src == 'unknown_src' or dst == 'unknown_dst':
+                if not src or not dst:
                     continue
 
                 if not G.has_node(src):
-                    G.add_node(src)
+                    G.add_node(src, device_type=device_type_by_node.get(src, 'unknown'))
                 if not G.has_node(dst):
-                    G.add_node(dst)
+                    G.add_node(dst, device_type=device_type_by_node.get(dst, 'unknown'))
 
                 if G.has_edge(src, dst):
                     G[src][dst]['weight'] += 1
