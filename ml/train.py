@@ -20,7 +20,7 @@ from typing import Protocol
 
 import numpy as np
 
-from ml.features import FEATURE_KEYS, build_windows, load_csv
+from ml.features import FEATURE_KEYS, build_windows, feature_row, load_csv
 
 
 class SupportsTransform(Protocol):
@@ -55,7 +55,7 @@ def windows_to_matrix(windows: list[dict]) -> tuple[np.ndarray, list[str], list[
     device_types = []
     for w in windows:
         feat = w.get("features", {})
-        row = [float(feat.get(k, 0.0)) for k in FEATURE_KEYS]
+        row = feature_row(feat, FEATURE_KEYS)
         rows.append(row)
         device_ids.append(w.get("device_id", "unknown"))
         device_types.append(w.get("device_type", ""))

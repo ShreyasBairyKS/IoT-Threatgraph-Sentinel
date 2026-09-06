@@ -85,27 +85,55 @@ def calculate_propagation_risk(G: nx.DiGraph, anomalous_node: str, base_risk: fl
     max_targets = max(1, min(6, max_targets))
     return round(propagation_risk, 3), next_targets[:max_targets]
 
-def trace_attack_paths(G: nx.DiGraph, start_node: str, depth: int = 2) -> List[List[str]]:
+_MAX_ATTACK_PATHS = 50
+_MAX_BRANCHING_PER_NODE = 5
+
+
+def trace_attack_paths(
+    G: nx.DiGraph,
+    start_node: str,
+    depth: int = 2,
+    max_paths: int = _MAX_ATTACK_PATHS,
+    max_branching: int = _MAX_BRANCHING_PER_NODE,
+) -> List[List[str]]:
     """
     Traces potential attack paths out of the anomalous node.
+
+    Branching is capped to the `max_branching` highest-weight successors of
+    each node and the total path count is capped at `max_paths`. Without
+    these caps, path count grows as out_degree^depth: a router-class node
+    with a realistic fan-out of 30-50 peers at depth=3 would otherwise
+    enumerate tens of thousands of paths for a single anomaly event.
     """
     if not G.has_node(start_node):
         return []
-        
-    paths = []
-    # Simple BFS to find paths up to `depth`
-    def get_paths(current_node, current_path):
+
+    paths: list[list[str]] = []
+
+    def get_paths(current_node: str, current_path: list[str]) -> None:
+        if len(paths) >= max_paths:
+            return
         if len(current_path) > depth:
             return
         paths.append(current_path)
-        for neighbor in G.successors(current_node):
-            if neighbor not in current_path: # Avoid loops
+
+        # Follow the highest-weight edges first so the cap below keeps the
+        # most meaningful paths rather than an arbitrary traversal order.
+        neighbors = sorted(
+            G.successors(current_node),
+            key=lambda n: G[current_node][n].get('weight', 0),
+            reverse=True,
+        )[:max_branching]
+        for neighbor in neighbors:
+            if len(paths) >= max_paths:
+                break
+            if neighbor not in current_path:  # Avoid loops
                 get_paths(neighbor, current_path + [neighbor])
-                
+
     get_paths(start_node, [start_node])
-    
+
     # Filter out length-1 paths (just the root node)
-    return [p for p in paths if len(p) > 1]
+    return [p for p in paths if len(p) > 1][:max_paths]
     
 def map_mitre_tags(reason_codes: List[str]) -> MITRETag:
     for code in reason_codes:

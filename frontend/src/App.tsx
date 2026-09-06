@@ -83,6 +83,7 @@ export default function App() {
   const [alertSnapshots, setAlertSnapshots] = useState<Record<string, AlertGraphSnapshot>>({});
 
   const [feedEvents, setFeedEvents] = useState<AlertEvent[]>([]);
+  const [initialLoadDone, setInitialLoadDone] = useState(false);
   const [showSimulator, setShowSimulator] = useState(false);
   const [compromiseToast, setCompromiseToast] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -92,17 +93,23 @@ export default function App() {
 
   // Live WebSocket
   const wsRef = useRef<WebSocket | null>(null);
+  // Mirrors wsStatus for the polling interval below, which is set up once
+  // ([] deps) and would otherwise only ever see the 'connecting' value it
+  // closed over.
+  const wsStatusRef = useRef(wsStatus);
+  useEffect(() => {
+    wsStatusRef.current = wsStatus;
+  }, [wsStatus]);
 
   // Fetch initial alerts + devices from API
   useEffect(() => {
-    const loadDevices = () => {
+    const loadDevices = () =>
       fetch(`${API_BASE}/devices`)
         .then((r) => r.json())
         .then((data: Device[]) => setDevices(data))
         .catch(() => {});
-    };
 
-    const loadAlerts = () => {
+    const loadAlerts = () =>
       fetch(`${API_BASE}/alerts`)
         .then((r) => r.json())
         .then((data: AlertEvent[]) => {
@@ -113,23 +120,32 @@ export default function App() {
           }
         })
         .catch(() => {});
-    };
 
-    const loadFeed = () => {
+    const loadFeed = () =>
       fetch(`${API_BASE}/feed?limit=300`)
         .then((r) => r.json())
         .then((data: AlertEvent[]) => setFeedEvents(data))
         .catch(() => {});
-    };
 
-    loadDevices();
-    loadAlerts();
-    loadFeed();
+    // Track completion of the first round-trip so the UI can show a loading
+    // state instead of "0" — otherwise a genuinely quiet system and a page
+    // that just hasn't heard from the backend yet look identical.
+    Promise.allSettled([loadDevices(), loadAlerts(), loadFeed()]).then(() => {
+      setInitialLoadDone(true);
+    });
 
     const pollId = window.setInterval(() => {
       loadDevices();
-      loadAlerts();
       loadFeed();
+      // The WebSocket already pushes every new alert directly into state
+      // (see the ws.onmessage handler below) and this same interval refires
+      // loadDevices()/loadFeed() to cover data the socket doesn't carry
+      // (device risk updates, sub-threshold feed events). Re-fetching the
+      // full /alerts list on top of that is pure duplicate traffic while
+      // connected — keep it only as the reconnect-time fallback.
+      if (wsStatusRef.current !== 'live') {
+        loadAlerts();
+      }
     }, 4000);
 
     return () => {
@@ -435,19 +451,36 @@ export default function App() {
         >
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Data Submitted</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}>{totalSubmittedCount}</div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Tracked devices / data sources received</div>
+            <div
+              className={initialLoadDone ? undefined : 'stat-value-loading'}
+              style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-primary)' }}
+            >
+              {initialLoadDone ? totalSubmittedCount : '—'}
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+              {initialLoadDone ? 'Tracked devices / data sources received' : 'Connecting to backend…'}
+            </div>
           </div>
 
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(249,115,22,0.28)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>Generating Alerts</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--risk-high)' }}>{alertingCount}</div>
+            <div
+              className={initialLoadDone ? undefined : 'stat-value-loading'}
+              style={{ fontSize: 22, fontWeight: 700, color: 'var(--risk-high)' }}
+            >
+              {initialLoadDone ? alertingCount : '—'}
+            </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Devices currently in active or elevated state</div>
           </div>
 
           <div style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(34,197,94,0.24)', borderRadius: 'var(--radius-md)', padding: '10px 12px' }}>
             <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginBottom: 4 }}>No Alerts</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--risk-normal)' }}>{quietCount}</div>
+            <div
+              className={initialLoadDone ? undefined : 'stat-value-loading'}
+              style={{ fontSize: 22, fontWeight: 700, color: 'var(--risk-normal)' }}
+            >
+              {initialLoadDone ? quietCount : '—'}
+            </div>
             <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>Devices submitting data without active alerts</div>
           </div>
         </div>
@@ -483,28 +516,50 @@ export default function App() {
             affectedOnly={Boolean(affectedDeviceIds)}
           />
 
-          <div
-            className="graph-stack"
-            style={{
-              gridTemplateRows: selectedEnrichment
-                ? 'minmax(280px, 1fr) minmax(220px, 0.85fr)'
-                : 'minmax(320px, 1fr)',
-            }}
-          >
-            {activeEnrichment ? (
-              <div style={{ position: 'relative', minHeight: 0, height: '100%' }}>
-                <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 30 }}>
+          <div className="graph-stack" style={{ gridTemplateRows: 'minmax(320px, 1fr)' }}>
+            <div style={{ position: 'relative', minHeight: 0, height: '100%' }}>
+              {/* Anchored below the panel's own header row (~52px), not on top
+                  of it — the header's title/subtitle/propagation-risk text is
+                  right-aligned too, so overlaying at top:10 collided with it
+                  once a second button ("Back to Live") was added here. */}
+              <div style={{ position: 'absolute', top: 58, right: 12, zIndex: 30, display: 'flex', gap: 8 }}>
+                {selectedEnrichment && (
                   <button
-                    className="btn btn-primary"
+                    className="btn btn-ghost"
                     type="button"
-                    onClick={() => setShowSimulator(true)}
-                    aria-label="Open threat simulator"
-                    title="Inject threat and visualize spread on graph"
+                    onClick={() => {
+                      setSelectedDevice(null);
+                      setSelectedAlert(null);
+                    }}
+                    aria-label="Return to live threat graph"
+                    title="Clear selection and return to the always-on live topology"
                   >
-                    <FlaskConical size={12} />
-                    Simulate Threat
+                    ← Back to Live
                   </button>
-                </div>
+                )}
+                <button
+                  className="btn btn-primary"
+                  type="button"
+                  onClick={() => setShowSimulator(true)}
+                  aria-label="Open threat simulator"
+                  title="Inject threat and visualize spread on graph"
+                >
+                  <FlaskConical size={12} />
+                  Simulate Threat
+                </button>
+              </div>
+
+              {selectedEnrichment ? (
+                <ThreatGraph
+                  devices={selectedGraphDevices}
+                  enrichment={selectedEnrichment}
+                  onNodeClick={handleNodeClick}
+                  title="Selected Incident Graph"
+                  subtitle={selectedAlert ? `${selectedAlert.device_id} · ${selectedAlert.event_id}` : 'focused incident view'}
+                  mode="focus"
+                  highlightedDeviceId={selectedAlert?.device_id ?? null}
+                />
+              ) : activeEnrichment ? (
                 <ThreatGraph
                   devices={liveGraphDevices}
                   enrichment={activeEnrichment}
@@ -514,41 +569,15 @@ export default function App() {
                   mode="live"
                   highlightedDeviceId={liveAlert?.device_id ?? null}
                 />
-              </div>
-            ) : (
-              <div style={{ position: 'relative', minHeight: 0, height: '100%' }}>
-                <div style={{ position: 'absolute', top: 10, right: 12, zIndex: 30 }}>
-                  <button
-                    className="btn btn-primary"
-                    type="button"
-                    onClick={() => setShowSimulator(true)}
-                    aria-label="Open threat simulator"
-                    title="Inject threat and visualize spread on graph"
-                  >
-                    <FlaskConical size={12} />
-                    Simulate Threat
-                  </button>
-                </div>
+              ) : (
                 <div className="panel" style={{ alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
                   <div className="card-header" style={{ width: '100%' }}>Live Threat Graph</div>
                   <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     Waiting for backend telemetry…
                   </div>
                 </div>
-              </div>
-            )}
-
-            {selectedEnrichment && (
-              <ThreatGraph
-                devices={selectedGraphDevices}
-                enrichment={selectedEnrichment}
-                onNodeClick={handleNodeClick}
-                title="Selected Incident Graph"
-                subtitle={selectedAlert ? `${selectedAlert.device_id} · ${selectedAlert.event_id}` : 'focused incident view'}
-                mode="focus"
-                highlightedDeviceId={selectedAlert?.device_id ?? null}
-              />
-            )}
+              )}
+            </div>
           </div>
 
           <div

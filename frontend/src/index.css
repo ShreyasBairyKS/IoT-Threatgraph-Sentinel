@@ -179,6 +179,18 @@ html, body, #root {
 
 .alert-item { animation: slide-in 0.25s ease forwards; }
 
+/* ── Stat card loading state ──────────────────────────────────────────── */
+/* Distinguishes "haven't heard from the backend yet" from a genuine zero,
+   which otherwise render identically on first paint. */
+@keyframes value-pulse {
+  0%, 100% { opacity: 0.35; }
+  50%      { opacity: 0.85; }
+}
+
+.stat-value-loading {
+  animation: value-pulse 1.4s ease-in-out infinite;
+}
+
 /* ── MITRE tag chip ─────────────────────────────────────────────────── */
 .mitre-chip {
   display: inline-flex;
@@ -435,10 +447,14 @@ input[type='range']::-webkit-slider-thumb {
 }
 
 /* ── Compromise toast ──────────────────────────────────────────────── */
+/* Anchored to the bottom, not the top: the stat-card row's height varies
+   with content (e.g. subtext wrapping on narrower widths), so a top-fixed
+   toast would drift into overlapping those cards. The bottom-center strip
+   is never occupied by another fixed element in either app view. */
 .compromise-toast {
   position: fixed;
   left: 50%;
-  top: 66px;
+  bottom: 66px;
   transform: translateX(-50%);
   z-index: 60;
   background: rgba(239, 68, 68, 0.14);

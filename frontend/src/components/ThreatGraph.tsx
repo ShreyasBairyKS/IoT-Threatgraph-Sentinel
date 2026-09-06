@@ -272,14 +272,28 @@ export function ThreatGraph({
   return (
     <div className="panel" style={{ borderRight: 'none', minHeight: 0, height: '100%', flex: 1 }}>
       <div className="card-header">
-        <GitBranch size={14} className="icon" />
-        {title}
-        {subtitle && (
-          <span style={{ fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>
-            {subtitle}
-          </span>
-        )}
-        <span style={{ marginLeft: 'auto', fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>
+        <GitBranch size={14} className="icon" style={{ flexShrink: 0 }} />
+        {/* Truncates instead of overflowing the header at narrow widths —
+            the propagation-risk badge below is more important to keep fully
+            visible than a long "device · event-id" subtitle. */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, overflow: 'hidden' }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
+          {subtitle && (
+            <span
+              style={{
+                fontSize: 13,
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {subtitle}
+            </span>
+          )}
+        </div>
+        <span style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 13, color: 'var(--text-primary)', fontWeight: 700 }}>
           propagation risk{' '}
           <strong style={{ color: propagationPct >= 70 ? 'var(--risk-high)' : 'var(--risk-medium)' }}>
             {propagationPct}%

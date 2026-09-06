@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,9 +27,15 @@ from typing import Any
 
 import numpy as np
 
-from ml.features import FEATURE_KEYS
+from ml.features import FEATURE_KEYS, feature_row
 from ml.score_window import Confidence, ScoreResult, _iso_utc_now
 from ml.train import load_artifact
+
+logger = logging.getLogger(__name__)
+
+# Set once a SHAP explanation attempt fails, so the fallback-in-use warning
+# below is logged a single time per process instead of on every inference.
+_shap_fallback_warned = False
 
 # ---------------------------------------------------------------------------
 # Model bundle
@@ -116,7 +123,7 @@ def load_models(model_dir: str | Path = "artifacts/models") -> ModelBundle:
 # ---------------------------------------------------------------------------
 
 def _feature_vector(features: dict[str, float]) -> np.ndarray:
-    return np.array([[float(features.get(k, 0.0)) for k in FEATURE_KEYS]], dtype=np.float64)
+    return np.array([feature_row(features, FEATURE_KEYS)], dtype=np.float64)
 
 
 def _if_score(models: ModelBundle, X_scaled: np.ndarray, cfg: InferenceConfig) -> float:
@@ -202,7 +209,15 @@ def _reason_codes_and_explanations(
             exps.append(
                 f"SHAP indicates {feat} {direction} anomaly likelihood (contribution {contrib:+.3f})."
             )
-    except Exception:
+    except Exception as exc:
+        global _shap_fallback_warned
+        if not _shap_fallback_warned:
+            logger.warning(
+                "SHAP explanation unavailable (%s: %s); falling back to z-score deviation "
+                "ranking for all subsequent inferences in this process.",
+                type(exc).__name__, exc,
+            )
+            _shap_fallback_warned = True
         # Fallback path: rank features by normalized deviation from the scaler baseline.
         means = np.asarray(getattr(models.scaler, "mean_", np.zeros(len(FEATURE_KEYS)))).reshape(-1)
         scales = np.asarray(getattr(models.scaler, "scale_", np.ones(len(FEATURE_KEYS)))).reshape(-1)

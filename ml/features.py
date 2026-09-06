@@ -54,6 +54,19 @@ FEATURE_KEYS = (
 WINDOW_SECONDS = 60
 
 
+def feature_row(features: dict[str, float], feature_keys: tuple[str, ...] = FEATURE_KEYS) -> list[float]:
+    """
+    Project a features dict into an ordered row matching *feature_keys*.
+
+    This is the single place that turns a {feature_name: value} mapping into
+    the fixed-order vector the models are trained and queried on — used by
+    both ml/train.py (building the training matrix) and ml/infer.py
+    (building a single-row query vector), so the two can't silently drift
+    out of sync on feature order or missing-value handling.
+    """
+    return [float(features.get(k, 0.0)) for k in feature_keys]
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
