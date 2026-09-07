@@ -1,0 +1,23 @@
+# Brings up backend + frontend together, per the "Full Local Stack"
+# instructions in docs/RUN_GUIDE.md (`docker compose up --build`).
+#
+# The frontend image bakes in frontend/.env at build time (Vite env vars
+# are compile-time, not runtime), which already points at
+# http://localhost:8000 / ws://localhost:8000 — correct here since both
+# services publish to the host and the built bundle runs in the browser,
+# not inside the container network.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build:
+      context: frontend
+    ports:
+      - "5173:4173"
+    depends_on:
+      - backend

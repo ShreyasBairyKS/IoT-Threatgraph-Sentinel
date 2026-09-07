@@ -24,6 +24,19 @@ type ConnectionSet = 'fanout' | 'chain' | 'pivot';
 
 const ALERT_THRESHOLD = 65;
 
+// Only sent when the backend has INGEST_API_KEY configured (opt-in, unset
+// by default); harmless to include unconditionally otherwise since the
+// backend ignores it unless that setting is turned on.
+const INGEST_API_KEY = import.meta.env.VITE_INGEST_API_KEY as string | undefined;
+
+function ingestHeaders(): HeadersInit {
+  const headers: HeadersInit = { 'Content-Type': 'application/json' };
+  if (INGEST_API_KEY) {
+    (headers as Record<string, string>)['X-API-Key'] = INGEST_API_KEY;
+  }
+  return headers;
+}
+
 const REASON_OPTIONS = [
   'outbound_volume_spike',
   'dest_ip_diversity_jump',
@@ -288,7 +301,7 @@ export function SimulateThreatPanel({ open, devices, apiBaseUrl, onGraphInjected
     try {
       const graphRes = await fetch(`${apiBaseUrl}/ingest/graph`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ingestHeaders(),
         body: JSON.stringify(enrichment),
       });
       if (!graphRes.ok) {
@@ -298,7 +311,7 @@ export function SimulateThreatPanel({ open, devices, apiBaseUrl, onGraphInjected
 
       const anomalyRes = await fetch(`${apiBaseUrl}/ingest/anomaly`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: ingestHeaders(),
         body: JSON.stringify(anomalyPayload),
       });
       if (!anomalyRes.ok) {

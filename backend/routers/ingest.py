@@ -19,9 +19,10 @@ no polling, no manual wiring needed on integration day.
 from __future__ import annotations
 
 import logging
-from fastapi import APIRouter, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends
 
 from backend.contracts import AnomalyResult, GraphEnrichment, DeviceSummary
+from backend.security import enforce_ingest_rate_limit, require_ingest_api_key
 from backend.store import (
     alert_store,
     feed_store,
@@ -36,7 +37,14 @@ from backend.ws.broadcaster import manager
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/ingest", tags=["ingest"])
+# Both dependencies guard every route below: the API key check is a no-op
+# unless INGEST_API_KEY is configured, but the rate limit is always active —
+# this is the one HTTP-facing trust boundary into the alert pipeline.
+router = APIRouter(
+    prefix="/ingest",
+    tags=["ingest"],
+    dependencies=[Depends(require_ingest_api_key), Depends(enforce_ingest_rate_limit)],
+)
 
 
 # ---------------------------------------------------------------------------

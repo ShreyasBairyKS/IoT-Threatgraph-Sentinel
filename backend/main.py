@@ -47,16 +47,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Start background tasks on server startup."""
     tasks: list[asyncio.Task[None]] = []
 
-    if settings.REALTIME_STREAM_ENABLED:
-        logger.info("Starting real-time stream feeder...")
-        tasks.append(asyncio.create_task(realtime_stream_loop()))
+    # DEMO_MODE is the single switch for a real deployment: set it to false
+    # to disable every synthetic/demo generator below at once, instead of
+    # having to know to flip each individual *_STREAM_ENABLED flag.
+    if not settings.DEMO_MODE:
+        logger.info("DEMO_MODE disabled — no synthetic/demo data generators started.")
     else:
-        logger.info("Starting mock WebSocket broadcaster...")
-        tasks.append(asyncio.create_task(mock_broadcast_loop()))
+        if settings.REALTIME_STREAM_ENABLED:
+            logger.info("Starting real-time stream feeder...")
+            tasks.append(asyncio.create_task(realtime_stream_loop()))
+        else:
+            logger.info("Starting mock WebSocket broadcaster...")
+            tasks.append(asyncio.create_task(mock_broadcast_loop()))
 
-    if settings.SYNTHETIC_STREAM_ENABLED:
-        logger.info("Starting synthetic stream (interval=%.1fs)...", settings.SYNTHETIC_STREAM_INTERVAL_SECONDS)
-        tasks.append(asyncio.create_task(synthetic_stream_loop()))
+        if settings.SYNTHETIC_STREAM_ENABLED:
+            logger.info("Starting synthetic stream (interval=%.1fs)...", settings.SYNTHETIC_STREAM_INTERVAL_SECONDS)
+            tasks.append(asyncio.create_task(synthetic_stream_loop()))
 
     yield
 

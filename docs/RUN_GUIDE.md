@@ -53,6 +53,25 @@ VITE_API_BASE_URL=http://localhost:8000
 VITE_WS_URL=ws://localhost:8000/ws/alerts
 ```
 
+Real backend settings for a non-demo deployment (all read from `backend/config.py`, override via env var or `.env`):
+
+```dotenv
+# Set false to disable every synthetic/demo data generator at once
+# (overrides SYNTHETIC_STREAM_ENABLED / REALTIME_STREAM_ENABLED below).
+DEMO_MODE=true
+
+# Empty (default) leaves POST /ingest/* unauthenticated, matching the
+# demo/local-dev setup. Set this to require the X-API-Key header on
+# ingest requests, and set the matching VITE_INGEST_API_KEY on the
+# frontend so its Simulate Threat panel keeps working.
+INGEST_API_KEY=
+
+# Per-client-IP request cap on POST /ingest/* (always enforced,
+# independent of INGEST_API_KEY).
+INGEST_RATE_LIMIT_MAX_REQUESTS=100
+INGEST_RATE_LIMIT_WINDOW_SECONDS=10
+```
+
 ---
 
 ## 4. Role-Wise Local Run Commands

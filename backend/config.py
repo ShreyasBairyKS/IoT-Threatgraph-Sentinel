@@ -44,5 +44,21 @@ class Settings(BaseSettings):
     # Override via env var: ALERT_RISK_THRESHOLD=70
     ALERT_RISK_THRESHOLD: float = 65.0
 
+    # Single switch for a real deployment: set DEMO_MODE=false to disable all
+    # synthetic/demo data generation regardless of the individual stream
+    # flags below, instead of having to know to flip each one separately.
+    DEMO_MODE: bool = True
+
+    # Shared-secret API key required on POST /ingest/* when set. Left empty
+    # by default so local development and the existing test suite keep
+    # working unauthenticated; set INGEST_API_KEY to lock ingestion down for
+    # a real deployment (send it back as the X-API-Key header).
+    INGEST_API_KEY: str = ""
+
+    # In-memory per-client rate limit on POST /ingest/* (protects the one
+    # unauthenticated-by-default trust boundary from abuse/flooding).
+    INGEST_RATE_LIMIT_MAX_REQUESTS: int = 100
+    INGEST_RATE_LIMIT_WINDOW_SECONDS: float = 10.0
+
 
 settings = Settings()
